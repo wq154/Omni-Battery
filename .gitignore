@@ -1,0 +1,27 @@
+# Gradle / Forge build outputs
+.gradle/
+build/
+run/
+out/
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local release artifacts
+*.jar
+!gradle/wrapper/gradle-wrapper.jar

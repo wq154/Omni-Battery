@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "omnibattery:block/low_battery_block" }
+  }
+}

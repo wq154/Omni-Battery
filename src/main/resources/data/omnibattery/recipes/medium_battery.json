@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "CEC",
+    "EHE",
+    "CEC"
+  ],
+  "key": {
+    "C": { "item": "minecraft:gold_ingot" },
+    "E": { "item": "minecraft:redstone_block" },
+    "H": { "item": "omnibattery:low_battery" }
+  },
+  "result": {
+    "item": "omnibattery:medium_battery",
+    "count": 1
+  }
+}
