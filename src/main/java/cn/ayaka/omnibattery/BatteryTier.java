@@ -5,7 +5,7 @@ public enum BatteryTier {
     MEDIUM("中级", 100_000_000_000L, 32, new int[]{5_000_000, 10_000_000, 25_000_000, 50_000_000, 100_000_000}, new int[]{12, 18, 24, 32}),
     ADVANCED("高级", 1_000_000_000_000L, 96, new int[]{10_000_000, 50_000_000, 100_000_000, 250_000_000, 500_000_000}, new int[]{16, 32, 48, 64, 96}),
     ELITE("精英", 100_000_000_000_000L, 256, new int[]{50_000_000, 100_000_000, 250_000_000, 500_000_000, 1_000_000_000}, new int[]{32, 64, 128, 192, 256}),
-    ULTIMATE("终极", Long.MAX_VALUE, -1, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE}, new int[]{64, 128, 256, 512, -1});
+    ULTIMATE("终极", Long.MAX_VALUE, 512, new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE}, new int[]{64, 128, 256, 512, -1});
 
     private final String display;
     private final long capacity;

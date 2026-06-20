@@ -26,9 +26,11 @@ import javax.annotation.Nullable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider {
     private final BatteryTier tier;
@@ -36,6 +38,10 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     private BatteryMode mode = BatteryMode.BOTH;
     private int rateIndex = 0;
     private int range = 16;
+    private boolean publicAccess = true;
+    private UUID ownerUuid = null;
+    private String ownerName = "";
+    private final Map<UUID, String> trustedPlayers = new LinkedHashMap<>();
 
     private final IEnergyStorage energyStorage;
     private final LazyOptional<IEnergyStorage> energyCap;
@@ -100,12 +106,15 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
 
         int start = remaining;
         for (ServerLevel level : originLevel.getServer().getAllLevels()) {
+            if (range >= 0 && level != originLevel) continue;
             StickerSavedData stickerData = StickerSavedData.get(level);
             for (BlockPos targetPos : getLoadedBlockEntityPositions(level)) {
                 if (remaining <= 0) break;
                 if (level == originLevel && targetPos.equals(worldPosition)) continue;
-                StickerMode sticker = stickerData.getMode(targetPos);
+                StickerSavedData.StickerEntry stickerEntry = stickerData.getEntry(targetPos);
+                StickerMode sticker = stickerEntry == null ? null : stickerEntry.mode();
                 if (sticker == null || !sticker.isActiveTransferMode()) continue;
+                if (!canUseSticker(stickerEntry)) continue;
                 BlockEntity be = level.getBlockEntity(targetPos);
                 if (be == null || be.isRemoved()) { stickerData.removeSticker(targetPos); continue; }
                 if (be instanceof OmniBatteryBlockEntity) { stickerData.removeSticker(targetPos); continue; }
@@ -134,12 +143,15 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
 
         int start = remaining;
         for (ServerLevel level : originLevel.getServer().getAllLevels()) {
+            if (range >= 0 && level != originLevel) continue;
             StickerSavedData stickerData = StickerSavedData.get(level);
             for (BlockPos targetPos : getLoadedBlockEntityPositions(level)) {
                 if (remaining <= 0) break;
                 if (level == originLevel && targetPos.equals(worldPosition)) continue;
-                StickerMode sticker = stickerData.getMode(targetPos);
+                StickerSavedData.StickerEntry stickerEntry = stickerData.getEntry(targetPos);
+                StickerMode sticker = stickerEntry == null ? null : stickerEntry.mode();
                 if (sticker == null || !sticker.isActiveTransferMode()) continue;
+                if (!canUseSticker(stickerEntry)) continue;
                 BlockEntity be = level.getBlockEntity(targetPos);
                 if (be == null || be.isRemoved()) { stickerData.removeSticker(targetPos); continue; }
                 if (be instanceof OmniBatteryBlockEntity) { stickerData.removeSticker(targetPos); continue; }
@@ -162,6 +174,16 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         if (remaining < start) setChanged();
     }
 
+
+    private boolean canUseSticker(StickerSavedData.StickerEntry entry) {
+        if (publicAccess) return true;
+        if (entry == null || entry.owner() == null) return false;
+        return isOwner(entry.owner()) || trustedPlayers.containsKey(entry.owner());
+    }
+
+    private boolean isOwner(UUID uuid) {
+        return uuid != null && ownerUuid != null && ownerUuid.equals(uuid);
+    }
 
 
     private boolean hasAnyEnergyCapability(BlockEntity be) {
@@ -558,8 +580,10 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         for (ServerPlayer player : originLevel.getServer().getPlayerList().getPlayers()) {
             if (remaining <= 0) break;
             if (!(player.level() instanceof ServerLevel playerLevel)) continue;
+            if (range >= 0 && playerLevel != originLevel) continue;
+            if (!canUsePower(player)) continue;
             if (!isLevelLoaded(playerLevel, player.blockPosition())) continue;
-            if (!tier.isUltimate() && !isTargetInRange(player.blockPosition())) continue;
+            if (!isTargetInRange(player.blockPosition())) continue;
 
             List<ItemStack> targets = new ArrayList<>();
             Inventory inv = player.getInventory();
@@ -636,7 +660,7 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     private List<BlockPos> getLoadedBlockEntityPositions(ServerLevel level) {
-        return tier.isUltimate() || range < 0 ? getUltimateLoadedBlockEntityPositions(level) : getRangedLoadedBlockEntityPositions(level);
+        return range < 0 ? getUltimateLoadedBlockEntityPositions(level) : getRangedLoadedBlockEntityPositions(level);
     }
 
     private List<BlockPos> getUltimateLoadedBlockEntityPositions(ServerLevel level) {
@@ -713,13 +737,13 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     private boolean isTargetInRange(BlockPos targetPos) {
-        if (tier.isUltimate() || range < 0) return true;
+        if (range < 0) return true;
         long r = Math.max(1, range);
         return targetPos.distSqr(worldPosition) <= r * r;
     }
 
     private int maxBlocksPerScan() {
-        return tier.isUltimate() ? Integer.MAX_VALUE : MAX_BLOCKS_PER_SCAN;
+        return range < 0 ? Integer.MAX_VALUE : MAX_BLOCKS_PER_SCAN;
     }
 
     /** Reflectively enumerate loaded chunks to avoid depending on obfuscated internals directly. */
@@ -811,6 +835,14 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         tag.putInt("Mode", mode.ordinal());
         tag.putInt("RateIndex", rateIndex);
         tag.putInt("Range", range);
+        tag.putBoolean("PublicAccess", publicAccess);
+        if (ownerUuid != null) tag.putString("OwnerUUID", ownerUuid.toString());
+        if (ownerName != null) tag.putString("OwnerName", ownerName);
+        CompoundTag trusted = new CompoundTag();
+        for (Map.Entry<UUID, String> entry : trustedPlayers.entrySet()) {
+            if (entry.getKey() != null) trusted.putString(entry.getKey().toString(), entry.getValue() == null ? "" : entry.getValue());
+        }
+        tag.put("TrustedPlayers", trusted);
     }
 
     @Override
@@ -821,7 +853,18 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         int mi = tag.getInt("Mode");
         mode = (mi >= 0 && mi < modes.length) ? modes[mi] : BatteryMode.BOTH;
         rateIndex = Math.max(0, Math.min(4, tag.getInt("RateIndex")));
-        range = tag.contains("Range") ? tag.getInt("Range") : tier.defaultRange();
+        range = tag.contains("Range") ? clampRange(tag.getInt("Range")) : tier.defaultRange();
+        publicAccess = !tag.contains("PublicAccess") || tag.getBoolean("PublicAccess");
+        ownerUuid = parseUUID(tag.getString("OwnerUUID"));
+        ownerName = tag.getString("OwnerName");
+        trustedPlayers.clear();
+        if (tag.contains("TrustedPlayers", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+            CompoundTag trusted = tag.getCompound("TrustedPlayers");
+            for (String key : trusted.getAllKeys()) {
+                UUID uuid = parseUUID(key);
+                if (uuid != null) trustedPlayers.put(uuid, trusted.getString(key));
+            }
+        }
     }
 
     @Override public Component getDisplayName() { return Component.translatable("screen.omnibattery.title"); }
@@ -840,9 +883,79 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     public int getRateIndex() { return rateIndex; }
     public void setRateIndex(int r) { this.rateIndex = Math.max(0, Math.min(4, r)); setChanged(); }
     public int getRange() { return range; }
+    private int clampRange(int r) {
+        if (tier.isUltimate() && r < 0) return -1;
+        int max = 1;
+        int[] steps = tier.rangeSteps();
+        for (int step : steps) {
+            if (step > 0) max = Math.max(max, step);
+        }
+        return Math.max(1, Math.min(max, r));
+    }
     public void setRange(int r) {
-        if (tier.isUltimate() && r < 0) this.range = -1;
-        else this.range = Math.max(1, r);
+        this.range = clampRange(r);
         setChanged();
+    }
+
+    public boolean isPublicAccess() { return publicAccess; }
+    public void setPublicAccess(boolean publicAccess) { this.publicAccess = publicAccess; setChanged(); }
+    public UUID getOwnerUuid() { return ownerUuid; }
+    public String getOwnerName() { return ownerName == null ? "" : ownerName; }
+    public Map<UUID, String> getTrustedPlayers() { return new LinkedHashMap<>(trustedPlayers); }
+
+    public void setOwner(UUID uuid, String name) {
+        this.ownerUuid = uuid;
+        this.ownerName = name == null ? "" : name;
+        setChanged();
+    }
+
+    public void ensureOwner(Player player) {
+        if (ownerUuid == null && player != null) setOwner(player.getUUID(), player.getGameProfile().getName());
+    }
+
+    public boolean canManage(Player player) {
+        return player != null && (ownerUuid == null || ownerUuid.equals(player.getUUID()));
+    }
+
+    public boolean canUsePower(Player player) {
+        if (player == null) return false;
+        if (publicAccess) return true;
+        return ownerUuid == null || ownerUuid.equals(player.getUUID()) || trustedPlayers.containsKey(player.getUUID());
+    }
+
+    public void setTrustedPlayers(Map<UUID, String> trusted) {
+        trustedPlayers.clear();
+        if (trusted != null) {
+            for (Map.Entry<UUID, String> entry : trusted.entrySet()) {
+                if (entry.getKey() != null) trustedPlayers.put(entry.getKey(), entry.getValue() == null ? "" : entry.getValue());
+            }
+        }
+        setChanged();
+    }
+
+    public void addTrusted(Player player) {
+        if (player != null) {
+            trustedPlayers.put(player.getUUID(), player.getGameProfile().getName());
+            setChanged();
+        }
+    }
+
+    public void removeTrusted(UUID uuid) {
+        if (uuid != null && trustedPlayers.remove(uuid) != null) setChanged();
+    }
+
+    public String trustedListDisplay() {
+        if (trustedPlayers.isEmpty()) return "无";
+        StringBuilder sb = new StringBuilder();
+        for (String name : trustedPlayers.values()) {
+            if (sb.length() > 0) sb.append("、");
+            sb.append(name == null || name.isBlank() ? "未知玩家" : name);
+        }
+        return sb.toString();
+    }
+
+    private static UUID parseUUID(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try { return UUID.fromString(raw); } catch (IllegalArgumentException ignored) { return null; }
     }
 }

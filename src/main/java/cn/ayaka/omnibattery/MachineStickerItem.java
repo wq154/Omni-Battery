@@ -78,7 +78,7 @@ public class MachineStickerItem extends Item {
             data.removeSticker(pos);
             player.displayClientMessage(Component.literal("已清除机器标签").withStyle(ChatFormatting.GRAY), true);
         } else {
-            data.setMode(pos, mode);
+            data.setMode(pos, mode, player.getUUID(), player.getGameProfile().getName());
             player.displayClientMessage(
                     Component.literal("已贴标签: ").withStyle(ChatFormatting.AQUA)
                             .append(Component.literal(mode.displayZh()).withStyle(colorOf(mode))),

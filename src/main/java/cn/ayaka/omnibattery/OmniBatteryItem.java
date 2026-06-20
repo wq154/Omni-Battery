@@ -5,6 +5,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -43,10 +44,13 @@ public class OmniBatteryItem extends BlockItem {
     @Override
     public InteractionResult place(BlockPlaceContext context) {
         ItemStack stack = context.getItemInHand();
+        Player player = context.getPlayer();
+        if (player != null) BatteryData.ensureOwner(stack, player);
         long energy = BatteryData.getEnergy(stack);
         BatteryMode mode = BatteryData.getMode(stack);
         int rateIndex = BatteryData.getRateIndex(stack);
         int range = BatteryData.getRange(stack, tier);
+        boolean publicAccess = BatteryData.isPublicAccess(stack);
 
         InteractionResult result = super.place(context);
         if (result.consumesAction() && !context.getLevel().isClientSide) {
@@ -60,6 +64,9 @@ public class OmniBatteryItem extends BlockItem {
                 be.setMode(mode);
                 be.setRateIndex(rateIndex);
                 be.setRange(range);
+                be.setPublicAccess(publicAccess);
+                be.setOwner(BatteryData.getOwnerUUID(stack), BatteryData.getOwnerName(stack));
+                be.setTrustedPlayers(BatteryData.getTrustedPlayers(stack));
             }
         }
         return result;
@@ -86,15 +93,19 @@ public class OmniBatteryItem extends BlockItem {
         int rateIndex = BatteryData.getRateIndex(stack);
         int range = BatteryData.getRange(stack, tier);
         BatteryMode mode = BatteryData.getMode(stack);
+        String owner = BatteryData.getOwnerName(stack);
 
         tooltip.add(Component.translatable("tooltip.omnibattery.tier", tier.display()).withStyle(ChatFormatting.GOLD));
         tooltip.add(Component.translatable("tooltip.omnibattery.energy", fmt(energy), fmt(tier.capacity())).withStyle(ChatFormatting.AQUA));
         tooltip.add(Component.translatable("tooltip.omnibattery.mode", mode.display()).withStyle(ChatFormatting.LIGHT_PURPLE));
         tooltip.add(Component.translatable("tooltip.omnibattery.range", formatRange(range)).withStyle(ChatFormatting.YELLOW));
         tooltip.add(Component.translatable("tooltip.omnibattery.rate", formatRate(rateIndex)).withStyle(ChatFormatting.GREEN));
+        tooltip.add(Component.literal("权限：" + BatteryData.accessDisplay(stack)).withStyle(BatteryData.isPublicAccess(stack) ? ChatFormatting.GREEN : ChatFormatting.RED));
+        if (!owner.isBlank()) tooltip.add(Component.literal("主人：" + owner).withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.literal(" "));
         tooltip.add(Component.literal("放置后右键方块：打开设置界面").withStyle(ChatFormatting.GRAY));
-        tooltip.add(Component.literal("物品形态不会自动工作").withStyle(ChatFormatting.DARK_GRAY));
+        tooltip.add(Component.literal("物品形态不会自动工作；机器传电必须放下电池").withStyle(ChatFormatting.DARK_GRAY));
+        tooltip.add(Component.literal("命令：/omnibattery access private/public，trust/untrust 授权").withStyle(ChatFormatting.DARK_GRAY));
         if (tier.isUltimate()) {
             tooltip.add(Component.literal("终极：最大范围全维度，最大速度无限").withStyle(ChatFormatting.RED));
         }

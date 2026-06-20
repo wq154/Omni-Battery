@@ -10,14 +10,14 @@ import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.item.ItemStack;
 
 public class OmniBatteryMenu extends AbstractContainerMenu {
-    // 0 energy low, 1 energy high, 2 capacity low, 3 capacity high, 4 tier, 5 mode, 6 rate, 7 range
+    // 0 energy low, 1 energy high, 2 capacity low, 3 capacity high, 4 tier, 5 mode, 6 rate, 7 range, 8 public access
     private final ContainerData data;
     private final OmniBatteryBlockEntity blockEntity;
 
     public OmniBatteryMenu(int id, Inventory inv, OmniBatteryBlockEntity be) {
         super(ModMenuTypes.OMNI_BATTERY.get(), id);
         this.blockEntity = be;
-        this.data = new SimpleContainerData(8);
+        this.data = new SimpleContainerData(9);
         addDataSlots(data);
     }
 
@@ -38,6 +38,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             data.set(5, blockEntity.getMode().ordinal());
             data.set(6, blockEntity.getRateIndex());
             data.set(7, blockEntity.getRange());
+            data.set(8, blockEntity.isPublicAccess() ? 1 : 0);
         }
     }
 
@@ -53,12 +54,16 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     @Override
     public boolean clickMenuButton(Player player, int button) {
         if (blockEntity == null) return false;
+        blockEntity.ensureOwner(player);
+        if (!blockEntity.canManage(player)) return false;
         switch (button) {
             case 0 -> blockEntity.setMode(blockEntity.getMode().next());
             case 1 -> blockEntity.setRateIndex(Math.min(4, blockEntity.getRateIndex() + 1));
             case 2 -> blockEntity.setRateIndex(Math.max(0, blockEntity.getRateIndex() - 1));
             case 3 -> blockEntity.setRange(cycleRange(blockEntity.getRange(), blockEntity.getTier(), false));
             case 4 -> blockEntity.setRange(cycleRange(blockEntity.getRange(), blockEntity.getTier(), true));
+            case 5 -> blockEntity.setPublicAccess(!blockEntity.isPublicAccess());
+            default -> { return false; }
         }
         broadcastChanges();
         return true;
@@ -80,6 +85,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     public BatteryMode getMode() { return BatteryMode.values()[Math.max(0, Math.min(data.get(5), BatteryMode.values().length - 1))]; }
     public int getRateIndex() { return data.get(6); }
     public int getRange() { return data.get(7); }
+    public boolean isPublicAccess() { return data.get(8) != 0; }
     public float getEnergyRatio() { return getMaxEnergy() > 0 ? (float) Math.min(1.0, (double) getEnergy() / (double) getMaxEnergy()) : 0; }
     public String getRateDisplay() {
         BatteryTier tier = getTier();
@@ -89,5 +95,8 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     public String getRangeDisplay() {
         int r = getRange();
         return r < 0 ? "全维度" : String.format("%,d 格", r);
+    }
+    public String getAccessDisplay() {
+        return isPublicAccess() ? "公开电" : "私有电";
     }
 }

@@ -1,7 +1,13 @@
 package cn.ayaka.omnibattery;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public final class BatteryData {
     private BatteryData() {}
@@ -11,6 +17,10 @@ public final class BatteryData {
     public static final String RATE = "OmniRate";
     public static final String MODE = "OmniMode";
     public static final String WORK = "OmniWorking";
+    public static final String PUBLIC_ACCESS = "OmniPublicAccess";
+    public static final String OWNER_UUID = "OmniOwnerUUID";
+    public static final String OWNER_NAME = "OmniOwnerName";
+    public static final String TRUSTED = "OmniTrustedPlayers";
 
     public static long getEnergy(ItemStack stack) {
         CompoundTag tag = stack.getTag();
@@ -71,7 +81,10 @@ public final class BatteryData {
             stack.getOrCreateTag().putInt(RANGE, -1);
             return;
         }
-        int max = Math.max(1, tier.rangeSteps()[tier.rangeSteps().length - 1]);
+        int max = 1;
+        for (int step : tier.rangeSteps()) {
+            if (step > 0) max = Math.max(max, step);
+        }
         stack.getOrCreateTag().putInt(RANGE, Math.max(1, Math.min(max, range)));
     }
 
@@ -96,7 +109,122 @@ public final class BatteryData {
         stack.getOrCreateTag().putBoolean(WORK, working);
     }
 
+    public static boolean isPublicAccess(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        return tag == null || !tag.contains(PUBLIC_ACCESS) || tag.getBoolean(PUBLIC_ACCESS);
+    }
+
+    public static void setPublicAccess(ItemStack stack, boolean publicAccess) {
+        stack.getOrCreateTag().putBoolean(PUBLIC_ACCESS, publicAccess);
+    }
+
+    public static String accessDisplay(ItemStack stack) {
+        return isPublicAccess(stack) ? "公开电" : "私有电";
+    }
+
+    public static UUID getOwnerUUID(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        if (tag == null || !tag.contains(OWNER_UUID)) return null;
+        return parseUUID(tag.getString(OWNER_UUID));
+    }
+
+    public static String getOwnerName(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        if (tag == null || !tag.contains(OWNER_NAME)) return "";
+        return tag.getString(OWNER_NAME);
+    }
+
+    public static void setOwner(ItemStack stack, Player player) {
+        if (player != null) setOwner(stack, player.getUUID(), player.getGameProfile().getName());
+    }
+
+    public static void setOwner(ItemStack stack, UUID uuid, String name) {
+        if (uuid == null) return;
+        CompoundTag tag = stack.getOrCreateTag();
+        tag.putString(OWNER_UUID, uuid.toString());
+        tag.putString(OWNER_NAME, name == null ? "" : name);
+    }
+
+    public static void ensureOwner(ItemStack stack, Player player) {
+        if (player != null && getOwnerUUID(stack) == null) setOwner(stack, player);
+    }
+
+    public static boolean isOwner(ItemStack stack, Player player) {
+        if (player == null) return false;
+        UUID owner = getOwnerUUID(stack);
+        return owner == null || owner.equals(player.getUUID());
+    }
+
+    public static boolean canUsePower(ItemStack stack, Player player) {
+        if (player == null) return false;
+        if (isPublicAccess(stack)) return true;
+        UUID owner = getOwnerUUID(stack);
+        return owner == null || owner.equals(player.getUUID()) || isTrusted(stack, player.getUUID());
+    }
+
+    public static Map<UUID, String> getTrustedPlayers(ItemStack stack) {
+        Map<UUID, String> ret = new LinkedHashMap<>();
+        CompoundTag tag = stack.getTag();
+        if (tag == null || !tag.contains(TRUSTED, Tag.TAG_COMPOUND)) return ret;
+        CompoundTag trusted = tag.getCompound(TRUSTED);
+        for (String key : trusted.getAllKeys()) {
+            UUID uuid = parseUUID(key);
+            if (uuid != null) ret.put(uuid, trusted.getString(key));
+        }
+        return ret;
+    }
+
+    public static void setTrustedPlayers(ItemStack stack, Map<UUID, String> trustedPlayers) {
+        CompoundTag trusted = new CompoundTag();
+        if (trustedPlayers != null) {
+            for (Map.Entry<UUID, String> entry : trustedPlayers.entrySet()) {
+                if (entry.getKey() != null) trusted.putString(entry.getKey().toString(), entry.getValue() == null ? "" : entry.getValue());
+            }
+        }
+        stack.getOrCreateTag().put(TRUSTED, trusted);
+    }
+
+    public static boolean isTrusted(ItemStack stack, UUID uuid) {
+        if (uuid == null) return false;
+        CompoundTag tag = stack.getTag();
+        if (tag == null || !tag.contains(TRUSTED, Tag.TAG_COMPOUND)) return false;
+        return tag.getCompound(TRUSTED).contains(uuid.toString());
+    }
+
+    public static void addTrusted(ItemStack stack, Player player) {
+        if (player == null) return;
+        CompoundTag tag = stack.getOrCreateTag();
+        CompoundTag trusted = tag.contains(TRUSTED, Tag.TAG_COMPOUND) ? tag.getCompound(TRUSTED) : new CompoundTag();
+        trusted.putString(player.getUUID().toString(), player.getGameProfile().getName());
+        tag.put(TRUSTED, trusted);
+    }
+
+    public static void removeTrusted(ItemStack stack, UUID uuid) {
+        if (uuid == null) return;
+        CompoundTag tag = stack.getTag();
+        if (tag == null || !tag.contains(TRUSTED, Tag.TAG_COMPOUND)) return;
+        CompoundTag trusted = tag.getCompound(TRUSTED);
+        trusted.remove(uuid.toString());
+        tag.put(TRUSTED, trusted);
+    }
+
+    public static String trustedListDisplay(ItemStack stack) {
+        Map<UUID, String> trusted = getTrustedPlayers(stack);
+        if (trusted.isEmpty()) return "无";
+        StringBuilder sb = new StringBuilder();
+        for (String name : trusted.values()) {
+            if (sb.length() > 0) sb.append("、");
+            sb.append(name == null || name.isBlank() ? "未知玩家" : name);
+        }
+        return sb.toString();
+    }
+
     public static int clampToForgeInt(long value) {
         return (int) Math.max(0L, Math.min(Integer.MAX_VALUE, value));
+    }
+
+    private static UUID parseUUID(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try { return UUID.fromString(raw); } catch (IllegalArgumentException ignored) { return null; }
     }
 }

@@ -8,11 +8,12 @@ import net.minecraft.world.entity.player.Inventory;
 
 public class OmniBatteryScreen extends AbstractContainerScreen<OmniBatteryMenu> {
     private Button modeBtn;
+    private Button accessBtn;
 
     public OmniBatteryScreen(OmniBatteryMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
         this.imageWidth = 248;
-        this.imageHeight = 184;
+        this.imageHeight = 206;
         this.inventoryLabelY = 9999;
         this.titleLabelY = 9999;
     }
@@ -36,6 +37,11 @@ public class OmniBatteryScreen extends AbstractContainerScreen<OmniBatteryMenu> 
                 .bounds(x + 126, y + 134, 22, 20).build());
         addRenderableWidget(Button.builder(Component.literal("+"), b -> minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 3))
                 .bounds(x + 196, y + 134, 22, 20).build());
+
+        accessBtn = addRenderableWidget(Button.builder(
+                Component.literal(menu.getAccessDisplay()),
+                b -> minecraft.gameMode.handleInventoryButtonClick(menu.containerId, 5)
+        ).bounds(x + 126, y + 165, 92, 20).build());
     }
 
     @Override
@@ -58,7 +64,6 @@ public class OmniBatteryScreen extends AbstractContainerScreen<OmniBatteryMenu> 
         Component titleText = Component.literal("OMNI BATTERY CONTROL");
         graphics.drawString(font, titleText, x + (imageWidth - font.width(titleText)) / 2, y + 12, 0xFFFFFF, false);
 
-        // left big battery icon
         int bx = x + 20, by = y + 48, bw = 68, bh = 100;
         graphics.fill(bx + 20, by - 8, bx + 48, by, 0xFFCAD6E6);
         graphics.fill(bx + 14, by, bx + bw - 14, by + bh, 0xFF05070B);
@@ -82,9 +87,11 @@ public class OmniBatteryScreen extends AbstractContainerScreen<OmniBatteryMenu> 
 
         drawPanelRow(graphics, x, y, 103, "速度", menu.getRateDisplay(), 0xFF4EEBFF);
         drawPanelRow(graphics, x, y, 134, "范围", menu.getRangeDisplay(), 0xFFFFE878);
+        drawPanelRow(graphics, x, y, 165, "权限", menu.getAccessDisplay(), menu.isPublicAccess() ? 0xFF7DFF99 : 0xFFFF8A8A);
+        if (accessBtn != null) accessBtn.setMessage(Component.literal(menu.getAccessDisplay()));
 
-        String hint = "发电机默认只吸不供｜FE上限尝试强制绕过";
-        graphics.drawString(font, hint, x + (imageWidth - font.width(hint)) / 2, y + 169, 0xFF8FA6BA, false);
+        String hint = "机器传电必须放置电池｜私有电仅主人/授权标签可用";
+        graphics.drawString(font, hint, x + (imageWidth - font.width(hint)) / 2, y + 191, 0xFF8FA6BA, false);
     }
 
     private void drawPanelRow(GuiGraphics graphics, int x, int y, int rowY, String label, String value, int color) {

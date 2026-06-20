@@ -8,10 +8,11 @@ import net.minecraft.world.level.saveddata.SavedData;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class StickerSavedData extends SavedData {
     private static final String DATA_NAME = "omnibattery_stickers";
-    private final Map<BlockPos, StickerMode> stickers = new HashMap<>();
+    private final Map<BlockPos, StickerEntry> stickers = new HashMap<>();
 
     public StickerSavedData() {}
 
@@ -23,7 +24,9 @@ public class StickerSavedData extends SavedData {
             BlockPos pos = new BlockPos(entry.getInt("x"), entry.getInt("y"), entry.getInt("z"));
             int modeIdx = entry.getInt("mode");
             if (modeIdx >= 0 && modeIdx < StickerMode.values().length) {
-                data.stickers.put(pos.immutable(), StickerMode.values()[modeIdx]);
+                UUID owner = parseUUID(entry.getString("owner"));
+                String ownerName = entry.getString("ownerName");
+                data.stickers.put(pos.immutable(), new StickerEntry(StickerMode.values()[modeIdx], owner, ownerName));
             }
         }
         return data;
@@ -32,12 +35,14 @@ public class StickerSavedData extends SavedData {
     @Override
     public CompoundTag save(CompoundTag tag) {
         ListTag list = new ListTag();
-        for (Map.Entry<BlockPos, StickerMode> entry : stickers.entrySet()) {
+        for (Map.Entry<BlockPos, StickerEntry> entry : stickers.entrySet()) {
             CompoundTag entryTag = new CompoundTag();
             entryTag.putInt("x", entry.getKey().getX());
             entryTag.putInt("y", entry.getKey().getY());
             entryTag.putInt("z", entry.getKey().getZ());
-            entryTag.putInt("mode", entry.getValue().ordinal());
+            entryTag.putInt("mode", entry.getValue().mode().ordinal());
+            if (entry.getValue().owner() != null) entryTag.putString("owner", entry.getValue().owner().toString());
+            if (entry.getValue().ownerName() != null) entryTag.putString("ownerName", entry.getValue().ownerName());
             list.add(entryTag);
         }
         tag.put("stickers", list);
@@ -45,14 +50,23 @@ public class StickerSavedData extends SavedData {
     }
 
     public StickerMode getMode(BlockPos pos) {
+        StickerEntry entry = stickers.get(pos);
+        return entry == null ? null : entry.mode();
+    }
+
+    public StickerEntry getEntry(BlockPos pos) {
         return stickers.get(pos);
     }
 
     public void setMode(BlockPos pos, StickerMode mode) {
+        setMode(pos, mode, null, "");
+    }
+
+    public void setMode(BlockPos pos, StickerMode mode, UUID owner, String ownerName) {
         if (mode == null) {
             stickers.remove(pos);
         } else {
-            stickers.put(pos.immutable(), mode);
+            stickers.put(pos.immutable(), new StickerEntry(mode, owner, ownerName == null ? "" : ownerName));
         }
         setDirty();
     }
@@ -65,4 +79,11 @@ public class StickerSavedData extends SavedData {
     public static StickerSavedData get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(StickerSavedData::load, StickerSavedData::new, DATA_NAME);
     }
+
+    private static UUID parseUUID(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try { return UUID.fromString(raw); } catch (IllegalArgumentException ignored) { return null; }
+    }
+
+    public record StickerEntry(StickerMode mode, UUID owner, String ownerName) {}
 }

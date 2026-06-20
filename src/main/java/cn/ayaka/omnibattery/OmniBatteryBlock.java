@@ -61,6 +61,7 @@ public class OmniBatteryBlock extends BaseEntityBlock {
         if (level.isClientSide) return InteractionResult.SUCCESS;
         BlockEntity be = level.getBlockEntity(pos);
         if (be instanceof OmniBatteryBlockEntity batteryBE && player instanceof ServerPlayer serverPlayer) {
+            batteryBE.ensureOwner(player);
             NetworkHooks.openScreen(serverPlayer, batteryBE, buf -> buf.writeBlockPos(pos));
         }
         return InteractionResult.CONSUME;
@@ -74,6 +75,9 @@ public class OmniBatteryBlock extends BaseEntityBlock {
             BatteryData.setMode(drop, batteryBE.getMode());
             BatteryData.setRateIndex(drop, batteryBE.getRateIndex());
             BatteryData.setRange(drop, batteryBE.getTier(), batteryBE.getRange());
+            BatteryData.setPublicAccess(drop, batteryBE.isPublicAccess());
+            BatteryData.setOwner(drop, batteryBE.getOwnerUuid(), batteryBE.getOwnerName());
+            BatteryData.setTrustedPlayers(drop, batteryBE.getTrustedPlayers());
             popResource(level, pos, drop);
         }
         super.playerDestroy(level, player, pos, state, be, tool);

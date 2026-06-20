@@ -25,3 +25,6 @@ Thumbs.db
 # Local release artifacts
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
+
+# Local backup files
+*.bak_*
