@@ -73,7 +73,11 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             case 2 -> blockEntity.setRateIndex(Math.max(0, blockEntity.getRateIndex() - 1));
             case 3 -> blockEntity.setRange(cycleRange(blockEntity.getRange(), blockEntity.getTier(), false));
             case 4 -> blockEntity.setRange(cycleRange(blockEntity.getRange(), blockEntity.getTier(), true));
-            case 5 -> blockEntity.setAccess(blockEntity.getAccess().next());
+            case 5 -> {
+                blockEntity.setAccess(blockEntity.getAccess().next());
+                player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                        "电池权限：" + blockEntity.getAccess().display()), true);
+            }
             case 6 -> blockEntity.setChargeInventory(!blockEntity.isChargeInventory());
             case 7 -> blockEntity.setChargeCurios(!blockEntity.isChargeCurios());
             default -> { return false; }

@@ -249,6 +249,8 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     private boolean canUseUuid(UUID uuid) {
         if (access == BatteryAccess.PUBLIC) return true;
         if (uuid == null) return false;
+        // 未认领的电池不放行任何人
+        if (ownerUuid == null) return false;
         if (isOwner(uuid) || trustedPlayers.containsKey(uuid)) return true;
         if (access == BatteryAccess.TEAM) return sameTeam(ownerUuid, uuid);
         return false;
@@ -1112,19 +1114,23 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         setChanged();
     }
 
-    public void ensureOwner(Player player) {
-        if (ownerUuid == null && player != null) setOwner(player.getUUID(), player.getGameProfile().getName());
+    public boolean ensureOwner(Player player) {
+        if (ownerUuid == null && player != null) {
+            setOwner(player.getUUID(), player.getGameProfile().getName());
+            return true;
+        }
+        return false;
     }
 
     public boolean canManage(Player player) {
-        return player != null && (ownerUuid == null || ownerUuid.equals(player.getUUID()));
+        return player != null && ownerUuid != null && ownerUuid.equals(player.getUUID());
     }
 
     public boolean canUsePower(Player player) {
         if (player == null) return false;
         if (access == BatteryAccess.PUBLIC) return true;
         if (canUseUuid(player.getUUID())) return true;
-        return ownerUuid == null;   // 未认领的电池对任何人开放（首次使用即认领）
+        return false;   // 未认领的电池不放行任何人（右键一次即认领）
     }
 
     public void setTrustedPlayers(Map<UUID, String> trusted) {

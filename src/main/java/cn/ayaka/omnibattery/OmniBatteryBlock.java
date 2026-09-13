@@ -61,7 +61,10 @@ public class OmniBatteryBlock extends BaseEntityBlock {
         if (level.isClientSide) return InteractionResult.SUCCESS;
         BlockEntity be = level.getBlockEntity(pos);
         if (be instanceof OmniBatteryBlockEntity batteryBE && player instanceof ServerPlayer serverPlayer) {
-            batteryBE.ensureOwner(player);
+            if (batteryBE.ensureOwner(player)) {
+                serverPlayer.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                        "你已成为这个电池的主人"), true);
+            }
             NetworkHooks.openScreen(serverPlayer, batteryBE, buf -> buf.writeBlockPos(pos));
         }
         return InteractionResult.CONSUME;
