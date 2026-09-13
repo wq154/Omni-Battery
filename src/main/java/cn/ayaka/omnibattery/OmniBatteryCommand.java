@@ -184,10 +184,10 @@ public final class OmniBatteryCommand {
         }
         if (add) {
             target.addTrusted(targetPlayer);
-            source.sendSuccess(() -> Component.literal("已授权玩家使用私有电：" + targetPlayer.getGameProfile().getName()).withStyle(ChatFormatting.GREEN), false);
+            source.sendSuccess(() -> Component.literal("已授权玩家使用本电池：" + targetPlayer.getGameProfile().getName()).withStyle(ChatFormatting.GREEN), false);
         } else {
             target.removeTrusted(targetPlayer.getUUID());
-            source.sendSuccess(() -> Component.literal("已移除私有电授权：" + targetPlayer.getGameProfile().getName()).withStyle(ChatFormatting.YELLOW), false);
+            source.sendSuccess(() -> Component.literal("已移除授权：" + targetPlayer.getGameProfile().getName()).withStyle(ChatFormatting.YELLOW), false);
         }
         return 1;
     }
@@ -195,7 +195,7 @@ public final class OmniBatteryCommand {
     private static int trustList(CommandSourceStack source) throws CommandSyntaxException {
         BatteryTarget target = selectedBattery(source);
         if (!prepareManage(source, target)) return 0;
-        source.sendSuccess(() -> Component.literal("私有电授权名单：" + target.trustedListDisplay()).withStyle(ChatFormatting.AQUA), false);
+        source.sendSuccess(() -> Component.literal("授权名单：" + target.trustedListDisplay()).withStyle(ChatFormatting.AQUA), false);
         return 1;
     }
 
