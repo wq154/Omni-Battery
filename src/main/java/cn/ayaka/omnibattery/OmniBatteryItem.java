@@ -50,7 +50,7 @@ public class OmniBatteryItem extends BlockItem {
         BatteryMode mode = BatteryData.getMode(stack);
         int rateIndex = BatteryData.getRateIndex(stack);
         int range = BatteryData.getRange(stack, tier);
-        boolean publicAccess = BatteryData.isPublicAccess(stack);
+        BatteryAccess access = BatteryData.getAccess(stack);
 
         InteractionResult result = super.place(context);
         if (result.consumesAction() && !context.getLevel().isClientSide) {
@@ -64,7 +64,7 @@ public class OmniBatteryItem extends BlockItem {
                 be.setMode(mode);
                 be.setRateIndex(rateIndex);
                 be.setRange(range);
-                be.setPublicAccess(publicAccess);
+                be.setAccess(access);
                 be.setOwner(BatteryData.getOwnerUUID(stack), BatteryData.getOwnerName(stack));
                 be.setTrustedPlayers(BatteryData.getTrustedPlayers(stack));
             }
@@ -100,7 +100,12 @@ public class OmniBatteryItem extends BlockItem {
         tooltip.add(Component.translatable("tooltip.omnibattery.mode", mode.display()).withStyle(ChatFormatting.LIGHT_PURPLE));
         tooltip.add(Component.translatable("tooltip.omnibattery.range", formatRange(range)).withStyle(ChatFormatting.YELLOW));
         tooltip.add(Component.translatable("tooltip.omnibattery.rate", formatRate(rateIndex)).withStyle(ChatFormatting.GREEN));
-        tooltip.add(Component.literal("权限：" + BatteryData.accessDisplay(stack)).withStyle(BatteryData.isPublicAccess(stack) ? ChatFormatting.GREEN : ChatFormatting.RED));
+        tooltip.add(Component.literal("权限：" + BatteryData.accessDisplay(stack))
+                .withStyle(switch (BatteryData.getAccess(stack)) {
+                    case PRIVATE -> ChatFormatting.RED;
+                    case TEAM -> ChatFormatting.AQUA;
+                    case PUBLIC -> ChatFormatting.GREEN;
+                }));
         if (!owner.isBlank()) tooltip.add(Component.literal("主人：" + owner).withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.literal(" "));
         tooltip.add(Component.literal("放置后右键方块：打开设置界面").withStyle(ChatFormatting.GRAY));

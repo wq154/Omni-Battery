@@ -38,7 +38,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             data.set(5, blockEntity.getMode().ordinal());
             data.set(6, blockEntity.getRateIndex());
             data.set(7, blockEntity.getRange());
-            data.set(8, blockEntity.isPublicAccess() ? 1 : 0);
+            data.set(8, blockEntity.getAccess().ordinal());
             // 实时速率：absorbed 占 9-10，supplied 占 11-12
             syncLong(9, blockEntity.getAbsorbedPerSecond());
             syncLong(11, blockEntity.getSuppliedPerSecond());
@@ -73,7 +73,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             case 2 -> blockEntity.setRateIndex(Math.max(0, blockEntity.getRateIndex() - 1));
             case 3 -> blockEntity.setRange(cycleRange(blockEntity.getRange(), blockEntity.getTier(), false));
             case 4 -> blockEntity.setRange(cycleRange(blockEntity.getRange(), blockEntity.getTier(), true));
-            case 5 -> blockEntity.setPublicAccess(!blockEntity.isPublicAccess());
+            case 5 -> blockEntity.setAccess(blockEntity.getAccess().next());
             case 6 -> blockEntity.setChargeInventory(!blockEntity.isChargeInventory());
             case 7 -> blockEntity.setChargeCurios(!blockEntity.isChargeCurios());
             default -> { return false; }
@@ -120,7 +120,9 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     public BatteryMode getMode() { return BatteryMode.values()[Math.max(0, Math.min(data.get(5), BatteryMode.values().length - 1))]; }
     public int getRateIndex() { return data.get(6); }
     public int getRange() { return data.get(7); }
-    public boolean isPublicAccess() { return data.get(8) != 0; }
+    public BatteryAccess getAccess() {
+        return BatteryAccess.values()[Math.max(0, Math.min(data.get(8), BatteryAccess.values().length - 1))];
+    }
     public float getEnergyRatio() { return getMaxEnergy() > 0 ? (float) Math.min(1.0, (double) getEnergy() / (double) getMaxEnergy()) : 0; }
     public String getRateDisplay() {
         BatteryTier tier = getTier();
@@ -132,6 +134,6 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
         return r < 0 ? "全维度" : String.format("%,d 格", r);
     }
     public String getAccessDisplay() {
-        return isPublicAccess() ? "公开电" : "私有电";
+        return getAccess().display();
     }
 }

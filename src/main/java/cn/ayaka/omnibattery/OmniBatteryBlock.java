@@ -75,7 +75,7 @@ public class OmniBatteryBlock extends BaseEntityBlock {
             BatteryData.setMode(drop, batteryBE.getMode());
             BatteryData.setRateIndex(drop, batteryBE.getRateIndex());
             BatteryData.setRange(drop, batteryBE.getTier(), batteryBE.getRange());
-            BatteryData.setPublicAccess(drop, batteryBE.isPublicAccess());
+            BatteryData.setAccess(drop, batteryBE.getAccess());
             BatteryData.setOwner(drop, batteryBE.getOwnerUuid(), batteryBE.getOwnerName());
             BatteryData.setTrustedPlayers(drop, batteryBE.getTrustedPlayers());
             popResource(level, pos, drop);

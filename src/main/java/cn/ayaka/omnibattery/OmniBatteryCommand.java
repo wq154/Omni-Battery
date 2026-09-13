@@ -154,17 +154,23 @@ public final class OmniBatteryCommand {
         BatteryTarget target = selectedBattery(source);
         if (!prepareManage(source, target)) return 0;
         String text = raw.toLowerCase();
-        Boolean publicAccess = switch (text) {
-            case "public", "open", "公开", "公开电" -> true;
-            case "private", "owner", "私有", "私有电" -> false;
+        BatteryAccess access = switch (text) {
+            case "public", "open", "公开", "公开电" -> BatteryAccess.PUBLIC;
+            case "team", "队伍", "队伍电" -> BatteryAccess.TEAM;
+            case "private", "owner", "私有", "私有电" -> BatteryAccess.PRIVATE;
             default -> null;
         };
-        if (publicAccess == null) {
-            source.sendFailure(Component.literal("权限只能是 public / private。"));
+        if (access == null) {
+            source.sendFailure(Component.literal("权限只能是 public / team / private。"));
             return 0;
         }
-        target.setPublicAccess(publicAccess);
-        source.sendSuccess(() -> Component.literal("电池权限已设为：" + (publicAccess ? "公开电" : "私有电")).withStyle(publicAccess ? ChatFormatting.GREEN : ChatFormatting.RED), false);
+        target.setAccess(access);
+        source.sendSuccess(() -> Component.literal("电池权限已设为：" + access.display())
+                .withStyle(switch (access) {
+                    case PRIVATE -> ChatFormatting.RED;
+                    case TEAM -> ChatFormatting.AQUA;
+                    case PUBLIC -> ChatFormatting.GREEN;
+                }), false);
         return 1;
     }
 
@@ -240,9 +246,9 @@ public final class OmniBatteryCommand {
             else BatteryData.setRateIndex(stack, rateIndex);
         }
 
-        void setPublicAccess(boolean publicAccess) {
-            if (blockEntity != null) blockEntity.setPublicAccess(publicAccess);
-            else BatteryData.setPublicAccess(stack, publicAccess);
+        void setAccess(BatteryAccess access) {
+            if (blockEntity != null) blockEntity.setAccess(access);
+            else BatteryData.setAccess(stack, access);
         }
 
         void addTrusted(Player player) {

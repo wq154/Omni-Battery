@@ -102,7 +102,7 @@ public class OmniBatteryScreen extends AbstractContainerScreen<OmniBatteryMenu> 
 
         drawPanelRow(graphics, x, y, 103, "速度", menu.getRateDisplay(), 0xFF4EEBFF);
         drawPanelRow(graphics, x, y, 134, "范围", menu.getRangeDisplay(), 0xFFFFE878);
-        drawPanelRow(graphics, x, y, 165, "权限", menu.getAccessDisplay(), menu.isPublicAccess() ? 0xFF7DFF99 : 0xFFFF8A8A);
+        drawPanelRow(graphics, x, y, 165, "权限", menu.getAccessDisplay(), accessColor());
         if (accessBtn != null) accessBtn.setMessage(Component.literal(menu.getAccessDisplay()));
 
         // ---- 实时速率：吸电 / 供电（各自独立计算）----
@@ -169,6 +169,15 @@ public class OmniBatteryScreen extends AbstractContainerScreen<OmniBatteryMenu> 
             if (e2 > -dy) { err -= dy; x1 += sx; }
             if (e2 < dx) { err += dx; y1 += sy; }
         }
+    }
+
+    /** 权限颜色：私人=红，队伍=蓝，公开=绿。 */
+    private int accessColor() {
+        return switch (menu.getAccess()) {
+            case PRIVATE -> 0xFFFF8A8A;
+            case TEAM -> 0xFF8AC8FF;
+            case PUBLIC -> 0xFF7DFF99;
+        };
     }
 
     private void drawPanelRow(GuiGraphics graphics, int x, int y, int rowY, String label, String value, int color) {

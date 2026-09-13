@@ -18,6 +18,7 @@ public final class BatteryData {
     public static final String MODE = "OmniMode";
     public static final String WORK = "OmniWorking";
     public static final String PUBLIC_ACCESS = "OmniPublicAccess";
+    public static final String ACCESS = "OmniAccess";   // 0 私人 / 1 队伍 / 2 公开
     public static final String OWNER_UUID = "OmniOwnerUUID";
     public static final String OWNER_NAME = "OmniOwnerName";
     public static final String TRUSTED = "OmniTrustedPlayers";
@@ -109,17 +110,25 @@ public final class BatteryData {
         stack.getOrCreateTag().putBoolean(WORK, working);
     }
 
-    public static boolean isPublicAccess(ItemStack stack) {
+    public static BatteryAccess getAccess(ItemStack stack) {
         CompoundTag tag = stack.getTag();
-        return tag == null || !tag.contains(PUBLIC_ACCESS) || tag.getBoolean(PUBLIC_ACCESS);
+        if (tag == null) return BatteryAccess.PRIVATE;
+        if (tag.contains(ACCESS)) {
+            int i = tag.getInt(ACCESS);
+            BatteryAccess[] all = BatteryAccess.values();
+            return i >= 0 && i < all.length ? all[i] : BatteryAccess.PRIVATE;
+        }
+        // 旧档兼容：布尔 PUBLIC_ACCESS（true=公开 / false=私人）
+        return (!tag.contains(PUBLIC_ACCESS) || tag.getBoolean(PUBLIC_ACCESS))
+                ? BatteryAccess.PUBLIC : BatteryAccess.PRIVATE;
     }
 
-    public static void setPublicAccess(ItemStack stack, boolean publicAccess) {
-        stack.getOrCreateTag().putBoolean(PUBLIC_ACCESS, publicAccess);
+    public static void setAccess(ItemStack stack, BatteryAccess access) {
+        stack.getOrCreateTag().putInt(ACCESS, access.ordinal());
     }
 
     public static String accessDisplay(ItemStack stack) {
-        return isPublicAccess(stack) ? "公开电" : "私有电";
+        return getAccess(stack).display();
     }
 
     public static UUID getOwnerUUID(ItemStack stack) {
@@ -157,9 +166,16 @@ public final class BatteryData {
 
     public static boolean canUsePower(ItemStack stack, Player player) {
         if (player == null) return false;
-        if (isPublicAccess(stack)) return true;
+        BatteryAccess access = getAccess(stack);
+        if (access == BatteryAccess.PUBLIC) return true;
         UUID owner = getOwnerUUID(stack);
-        return owner == null || owner.equals(player.getUUID()) || isTrusted(stack, player.getUUID());
+        if (owner == null || owner.equals(player.getUUID()) || isTrusted(stack, player.getUUID())) return true;
+        if (access == BatteryAccess.TEAM
+                && player instanceof net.minecraft.server.level.ServerPlayer sp) {
+            net.minecraft.server.level.ServerPlayer po = sp.server.getPlayerList().getPlayer(owner);
+            if (po != null && po.getTeam() != null && po.getTeam() == sp.getTeam()) return true;
+        }
+        return false;
     }
 
     public static Map<UUID, String> getTrustedPlayers(ItemStack stack) {

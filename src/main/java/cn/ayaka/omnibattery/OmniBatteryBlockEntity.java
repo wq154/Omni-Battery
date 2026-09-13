@@ -38,7 +38,7 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     private BatteryMode mode = BatteryMode.BOTH;
     private int rateIndex = 0;
     private int range = 16;
-    private boolean publicAccess = true;
+    private BatteryAccess access = BatteryAccess.PRIVATE;
     /** 是否给玩家物品栏（含快捷栏/护甲/副手）内的物品供电。 */
     private boolean chargeInventory = true;
     /** 是否给玩家饰品栏（Curios）内的物品供电。 */
@@ -239,9 +239,27 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
 
 
     private boolean canUseSticker(StickerSavedData.StickerEntry entry) {
-        if (publicAccess) return true;
-        if (entry == null || entry.owner() == null) return false;
-        return isOwner(entry.owner()) || trustedPlayers.containsKey(entry.owner());
+        if (access == BatteryAccess.PUBLIC) return true;
+        return entry != null && canUseUuid(entry.owner());
+    }
+
+    /** 某玩家（UUID）是否可用本电池传电：私人 / 队伍 / 公开。 */
+    private boolean canUseUuid(UUID uuid) {
+        if (access == BatteryAccess.PUBLIC) return true;
+        if (uuid == null) return false;
+        if (isOwner(uuid) || trustedPlayers.containsKey(uuid)) return true;
+        if (access == BatteryAccess.TEAM) return sameTeam(ownerUuid, uuid);
+        return false;
+    }
+
+    /** 两名玩家是否处于同一记分板队伍。 */
+    private boolean sameTeam(UUID a, UUID b) {
+        if (!(level instanceof ServerLevel sl)) return false;
+        ServerPlayer pa = sl.getServer().getPlayerList().getPlayer(a);
+        ServerPlayer pb = sl.getServer().getPlayerList().getPlayer(b);
+        if (pa == null || pb == null) return false;
+        net.minecraft.world.scores.Team ta = pa.getTeam();
+        return ta != null && ta == pb.getTeam();
     }
 
     private boolean isOwner(UUID uuid) {
@@ -906,7 +924,7 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         tag.putInt("Mode", mode.ordinal());
         tag.putInt("RateIndex", rateIndex);
         tag.putInt("Range", range);
-        tag.putBoolean("PublicAccess", publicAccess);
+        tag.putInt("Access", access.ordinal());   // 0 私人 / 1 队伍 / 2 公开
         tag.putBoolean("ChargeInventory", chargeInventory);
         tag.putBoolean("ChargeCurios", chargeCurios);
         if (ownerUuid != null) tag.putString("OwnerUUID", ownerUuid.toString());
@@ -927,7 +945,15 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         mode = (mi >= 0 && mi < modes.length) ? modes[mi] : BatteryMode.BOTH;
         rateIndex = Math.max(0, Math.min(4, tag.getInt("RateIndex")));
         range = tag.contains("Range") ? clampRange(tag.getInt("Range")) : tier.defaultRange();
-        publicAccess = !tag.contains("PublicAccess") || tag.getBoolean("PublicAccess");
+        if (tag.contains("Access")) {
+            int ai = tag.getInt("Access");
+            BatteryAccess[] accs = BatteryAccess.values();
+            access = ai >= 0 && ai < accs.length ? accs[ai] : BatteryAccess.PRIVATE;
+        } else {
+            // 旧档兼容：布尔 PublicAccess（true=公开 / false=私人）
+            access = (!tag.contains("PublicAccess") || tag.getBoolean("PublicAccess"))
+                    ? BatteryAccess.PUBLIC : BatteryAccess.PRIVATE;
+        }
         chargeInventory = !tag.contains("ChargeInventory") || tag.getBoolean("ChargeInventory");
         chargeCurios = !tag.contains("ChargeCurios") || tag.getBoolean("ChargeCurios");
         ownerUuid = parseUUID(tag.getString("OwnerUUID"));
@@ -1002,8 +1028,8 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         setChanged();
     }
 
-    public boolean isPublicAccess() { return publicAccess; }
-    public void setPublicAccess(boolean publicAccess) { this.publicAccess = publicAccess; setChanged(); }
+    public BatteryAccess getAccess() { return access; }
+    public void setAccess(BatteryAccess a) { this.access = a; setChanged(); }
     public UUID getOwnerUuid() { return ownerUuid; }
     public String getOwnerName() { return ownerName == null ? "" : ownerName; }
     public Map<UUID, String> getTrustedPlayers() { return new LinkedHashMap<>(trustedPlayers); }
@@ -1024,8 +1050,9 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
 
     public boolean canUsePower(Player player) {
         if (player == null) return false;
-        if (publicAccess) return true;
-        return ownerUuid == null || ownerUuid.equals(player.getUUID()) || trustedPlayers.containsKey(player.getUUID());
+        if (access == BatteryAccess.PUBLIC) return true;
+        if (canUseUuid(player.getUUID())) return true;
+        return ownerUuid == null;   // 未认领的电池对任何人开放（首次使用即认领）
     }
 
     public void setTrustedPlayers(Map<UUID, String> trusted) {
