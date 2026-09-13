@@ -17,7 +17,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     public OmniBatteryMenu(int id, Inventory inv, OmniBatteryBlockEntity be) {
         super(ModMenuTypes.OMNI_BATTERY.get(), id);
         this.blockEntity = be;
-        this.data = new SimpleContainerData(13 + OmniBatteryBlockEntity.HISTORY_SIZE * 4);
+        this.data = new SimpleContainerData(15 + OmniBatteryBlockEntity.HISTORY_SIZE * 4);
         addDataSlots(data);
     }
 
@@ -42,10 +42,12 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             // 实时速率：absorbed 占 9-10，supplied 占 11-12
             syncLong(9, blockEntity.getAbsorbedPerSecond());
             syncLong(11, blockEntity.getSuppliedPerSecond());
+            data.set(13, blockEntity.isChargeInventory() ? 1 : 0);
+            data.set(14, blockEntity.isChargeCurios() ? 1 : 0);
             // 趋势图历史：每点 4 个 int slot（absorb long + supply long）
             for (int i = 0; i < OmniBatteryBlockEntity.HISTORY_SIZE; i++) {
-                syncLong(13 + i * 4, blockEntity.getAbsorbHistory(i));
-                syncLong(13 + i * 4 + 2, blockEntity.getSupplyHistory(i));
+                syncLong(15 + i * 4, blockEntity.getAbsorbHistory(i));
+                syncLong(15 + i * 4 + 2, blockEntity.getSupplyHistory(i));
             }
         }
         super.broadcastChanges();
@@ -72,6 +74,8 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             case 3 -> blockEntity.setRange(cycleRange(blockEntity.getRange(), blockEntity.getTier(), false));
             case 4 -> blockEntity.setRange(cycleRange(blockEntity.getRange(), blockEntity.getTier(), true));
             case 5 -> blockEntity.setPublicAccess(!blockEntity.isPublicAccess());
+            case 6 -> blockEntity.setChargeInventory(!blockEntity.isChargeInventory());
+            case 7 -> blockEntity.setChargeCurios(!blockEntity.isChargeCurios());
             default -> { return false; }
         }
         broadcastChanges();
@@ -93,8 +97,10 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     public long getAbsorbedPerSecond() { return readLong(9); }
     public long getSuppliedPerSecond() { return readLong(11); }
     public int getHistorySize() { return OmniBatteryBlockEntity.HISTORY_SIZE; }
-    public long getAbsorbHistory(int i) { return readLong(13 + i * 4); }
-    public long getSupplyHistory(int i) { return readLong(13 + i * 4 + 2); }
+    public long getAbsorbHistory(int i) { return readLong(15 + i * 4); }
+    public long getSupplyHistory(int i) { return readLong(15 + i * 4 + 2); }
+    public boolean isChargeInventory() { return data.get(13) != 0; }
+    public boolean isChargeCurios() { return data.get(14) != 0; }
 
     /** 完整数字（千分位），不加 K/M/B/T 缩写。 */
     public static String fmt(long v) {

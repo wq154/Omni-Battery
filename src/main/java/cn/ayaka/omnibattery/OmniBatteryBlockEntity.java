@@ -39,6 +39,10 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     private int rateIndex = 0;
     private int range = 16;
     private boolean publicAccess = true;
+    /** 是否给玩家物品栏（含快捷栏/护甲/副手）内的物品供电。 */
+    private boolean chargeInventory = true;
+    /** 是否给玩家饰品栏（Curios）内的物品供电。 */
+    private boolean chargeCurios = true;
     private UUID ownerUuid = null;
     private String ownerName = "";
     private final Map<UUID, String> trustedPlayers = new LinkedHashMap<>();
@@ -645,12 +649,18 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
             if (!isTargetInRange(player.blockPosition())) continue;
 
             List<ItemStack> targets = new ArrayList<>();
-            Inventory inv = player.getInventory();
-            // Player inventory only. Do NOT recurse into backpack/container items.
-            targets.addAll(inv.items);
-            targets.addAll(inv.offhand);
-            targets.addAll(inv.armor);
-            addCuriosItemsSoft(player, targets);
+            // 物品栏供电开关（背包类容器物品永不受电，见下方 isBackpackLikeItem）
+            if (chargeInventory) {
+                Inventory inv = player.getInventory();
+                // Player inventory only. Do NOT recurse into backpack/container items.
+                targets.addAll(inv.items);
+                targets.addAll(inv.offhand);
+                targets.addAll(inv.armor);
+            }
+            // 饰品栏供电开关
+            if (chargeCurios) {
+                addCuriosItemsSoft(player, targets);
+            }
 
             int touched = 0;
             for (ItemStack target : targets) {
@@ -897,6 +907,8 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         tag.putInt("RateIndex", rateIndex);
         tag.putInt("Range", range);
         tag.putBoolean("PublicAccess", publicAccess);
+        tag.putBoolean("ChargeInventory", chargeInventory);
+        tag.putBoolean("ChargeCurios", chargeCurios);
         if (ownerUuid != null) tag.putString("OwnerUUID", ownerUuid.toString());
         if (ownerName != null) tag.putString("OwnerName", ownerName);
         CompoundTag trusted = new CompoundTag();
@@ -916,6 +928,8 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         rateIndex = Math.max(0, Math.min(4, tag.getInt("RateIndex")));
         range = tag.contains("Range") ? clampRange(tag.getInt("Range")) : tier.defaultRange();
         publicAccess = !tag.contains("PublicAccess") || tag.getBoolean("PublicAccess");
+        chargeInventory = !tag.contains("ChargeInventory") || tag.getBoolean("ChargeInventory");
+        chargeCurios = !tag.contains("ChargeCurios") || tag.getBoolean("ChargeCurios");
         ownerUuid = parseUUID(tag.getString("OwnerUUID"));
         ownerName = tag.getString("OwnerName");
         trustedPlayers.clear();
@@ -940,6 +954,11 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     public long getEnergy() { return energy; }
     public long getAbsorbedPerSecond() { return lastAbsorbed; }
     public long getSuppliedPerSecond() { return lastSupplied; }
+    public boolean isChargeInventory() { return chargeInventory; }
+    public boolean isChargeCurios() { return chargeCurios; }
+
+    public void setChargeInventory(boolean v) { chargeInventory = v; setChanged(); }
+    public void setChargeCurios(boolean v) { chargeCurios = v; setChanged(); }
 
     /** 记录趋势图采样点（每秒一次）。 */
     public void recordHistory(long absorbed, long supplied) {
