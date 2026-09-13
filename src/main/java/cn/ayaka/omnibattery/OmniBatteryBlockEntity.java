@@ -39,10 +39,10 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     private int rateIndex = 0;
     private int range = 16;
     private BatteryAccess access = BatteryAccess.PRIVATE;
-    /** 是否给玩家物品栏（含快捷栏/护甲/副手）内的物品供电。 */
-    private boolean chargeInventory = true;
-    /** 是否给玩家饰品栏（Curios）内的物品供电。 */
-    private boolean chargeCurios = true;
+    /** 是否给玩家物品栏（含快捷栏/护甲/副手）内的物品供电（默认关闭）。 */
+    private boolean chargeInventory = false;
+    /** 是否给玩家饰品栏（Curios）内的物品供电（默认关闭）。 */
+    private boolean chargeCurios = false;
     private UUID ownerUuid = null;
     private String ownerName = "";
     private final Map<UUID, String> trustedPlayers = new LinkedHashMap<>();
@@ -1015,8 +1015,8 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
             access = (!tag.contains("PublicAccess") || tag.getBoolean("PublicAccess"))
                     ? BatteryAccess.PUBLIC : BatteryAccess.PRIVATE;
         }
-        chargeInventory = !tag.contains("ChargeInventory") || tag.getBoolean("ChargeInventory");
-        chargeCurios = !tag.contains("ChargeCurios") || tag.getBoolean("ChargeCurios");
+        chargeInventory = tag.contains("ChargeInventory") && tag.getBoolean("ChargeInventory");
+        chargeCurios = tag.contains("ChargeCurios") && tag.getBoolean("ChargeCurios");
         ownerUuid = parseUUID(tag.getString("OwnerUUID"));
         ownerName = tag.getString("OwnerName");
         trustedPlayers.clear();
