@@ -17,7 +17,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     public OmniBatteryMenu(int id, Inventory inv, OmniBatteryBlockEntity be) {
         super(ModMenuTypes.OMNI_BATTERY.get(), id);
         this.blockEntity = be;
-        this.data = new SimpleContainerData(9);
+        this.data = new SimpleContainerData(13 + OmniBatteryBlockEntity.HISTORY_SIZE * 4);
         addDataSlots(data);
     }
 
@@ -30,7 +30,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
 
     @Override
     public void broadcastChanges() {
-        super.broadcastChanges();
+        // 先更新 data slots，再交给 super 发送（顺序反了客户端会慢一帧）
         if (blockEntity != null) {
             syncLong(0, blockEntity.getEnergy());
             syncLong(2, blockEntity.getTier().capacity());
@@ -39,7 +39,16 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             data.set(6, blockEntity.getRateIndex());
             data.set(7, blockEntity.getRange());
             data.set(8, blockEntity.isPublicAccess() ? 1 : 0);
+            // 实时速率：absorbed 占 9-10，supplied 占 11-12
+            syncLong(9, blockEntity.getAbsorbedPerSecond());
+            syncLong(11, blockEntity.getSuppliedPerSecond());
+            // 趋势图历史：每点 4 个 int slot（absorb long + supply long）
+            for (int i = 0; i < OmniBatteryBlockEntity.HISTORY_SIZE; i++) {
+                syncLong(13 + i * 4, blockEntity.getAbsorbHistory(i));
+                syncLong(13 + i * 4 + 2, blockEntity.getSupplyHistory(i));
+            }
         }
+        super.broadcastChanges();
     }
 
     private void syncLong(int index, long value) {
@@ -81,6 +90,26 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
 
     public long getEnergy() { return readLong(0); }
     public long getMaxEnergy() { return readLong(2); }
+    public long getAbsorbedPerSecond() { return readLong(9); }
+    public long getSuppliedPerSecond() { return readLong(11); }
+    public int getHistorySize() { return OmniBatteryBlockEntity.HISTORY_SIZE; }
+    public long getAbsorbHistory(int i) { return readLong(13 + i * 4); }
+    public long getSupplyHistory(int i) { return readLong(13 + i * 4 + 2); }
+
+    /** 完整数字（千分位），不加 K/M/B/T 缩写。 */
+    public static String fmt(long v) {
+        if (v == Long.MAX_VALUE) return "∞";
+        return String.format("%,d", v);
+    }
+
+    /** 简写数字：K/M/B/T 单位 + 两位小数（用于位数极长的显示）。 */
+    public static String fmtShort(long v) {
+        if (v >= 1_000_000_000_000L) return String.format("%.2fT", v / 1e12);
+        if (v >= 1_000_000_000L) return String.format("%.2fB", v / 1e9);
+        if (v >= 1_000_000L) return String.format("%.2fM", v / 1e6);
+        if (v >= 1_000L) return String.format("%.2fK", v / 1e3);
+        return String.valueOf(v);
+    }
     public BatteryTier getTier() { return BatteryTier.values()[Math.max(0, Math.min(data.get(4), BatteryTier.values().length - 1))]; }
     public BatteryMode getMode() { return BatteryMode.values()[Math.max(0, Math.min(data.get(5), BatteryMode.values().length - 1))]; }
     public int getRateIndex() { return data.get(6); }
@@ -90,7 +119,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     public String getRateDisplay() {
         BatteryTier tier = getTier();
         if (tier.isUltimate() && getRateIndex() >= tier.rates().length - 1) return "无限";
-        return String.format("%,d FE/t", tier.rate(getRateIndex()));
+        return fmt(tier.rate(getRateIndex())) + " FE/t";
     }
     public String getRangeDisplay() {
         int r = getRange();

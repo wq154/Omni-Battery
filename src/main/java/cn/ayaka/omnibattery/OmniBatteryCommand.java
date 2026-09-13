@@ -145,7 +145,7 @@ public final class OmniBatteryCommand {
         BatteryTarget target = selectedBattery(source);
         if (!prepareManage(source, target)) return 0;
         target.setRateIndex(level - 1);
-        int rate = target.getTier().rate(level - 1);
+        long rate = target.getTier().rate(level - 1);
         source.sendSuccess(() -> Component.translatable("message.omnibattery.rate", String.valueOf(rate)).withStyle(ChatFormatting.GREEN), false);
         return 1;
     }

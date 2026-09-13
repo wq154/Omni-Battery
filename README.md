@@ -1,45 +1,70 @@
-# Omni Battery / 万能电池
+# Omni Battery · 万能电池 (Forge 1.20.1)
 
-GT15 LightTech Sky 专用 Forge 1.20.1 能源缓冲模组，为空岛科技线提供便携电池与跨阶段能源缓冲。
+> 一台装得下整片世界的电池。从 10G FE 到**无限容量**，为大型整合包与自动化基地而生。
 
-## Target
+**作者**：Ayaka　·　**Mod ID**：`omnibattery`　·　**版本**：1.0.0
 
-- Minecraft: 1.20.1
-- Loader: Forge 47.x
-- Java: 17
-- Main pack: GT15 LightTech Sky
-- Owner: wq154
+## 支持版本
 
-## Features
+| Minecraft | 加载器 | 说明 |
+|-----------|--------|------|
+| **1.20.1** | Forge `[47,)` | 本仓库 |
+| 1.21.1 | NeoForge `[21.1,)` | 见 [Omni-Battery-NeoForge-1.21.1](https://github.com/wq154/Omni-Battery-NeoForge-1.21.1) |
 
-- 低级/中级/高级/精英/终极电池与方块
-- 用于 GT15 主线的电网缓冲和机器启动保护
-- 服务空岛建厂体验，减少早中期掉电挫败感
-- 后期与 GT15 Core 能源保险继电器联动
-- 不跳过 GregTech 发电与电压推进，只提供缓冲玩法
+## 特性
 
-## Repository
+### 五级电池
+| 等级 | 容量 | 速率档位（FE/t） |
+|------|------|------------------|
+| 低级 | 10 G | 100K → 5M |
+| 中级 | 100 G | 500K → 10M |
+| 高级 | 1 T | 1M → 25M |
+| 精英 | 100 T | 2.5M → 50M |
+| **终极** | **∞（Long.MAX_VALUE）** | 50M → 100M → 250M → 500M → **无限** |
 
-https://github.com/wq154/Omni-Battery
+### 核心能力
+- **无限档突破**：终极电池最高速率档可突破 Forge 能量 API 的 21 亿 int 上限（内部 long 存储 + int 分块循环传输）
+- **吸电 / 供电独立**：两个方向各自按设定速率工作，互不挤占，GUI 中分行实时显示（FE/t）
+- **实时趋势图**：GUI 底部显示最近 60 秒的吸电（橙）/ 供电（青）折线
 
-## Build
+### 权限系统
+- **私有电 / 公开电**：电池可切换为私有，仅**主人**与**授权玩家**放置的贴纸可传电
+- 贴纸带所有者标记，越权贴纸将被忽略
 
-```bat
-REM Use Java 17
-set JAVA_HOME=C:\Program Files\Zulu\zulu-17
-set PATH=%JAVA_HOME%\bin;%PATH%
+### 视觉
+- **立体 3D 模型**：顶盖 + 主体 + 底盘，五色金属区分（铁 / 铜 / 银 / 金 / 钛紫）
+- **玻璃观察窗**：电量柱随充放电实时变化（方块状态 0-10 档驱动材质变体）
 
-REM If Gradle is installed
-gradle build
+### 交互
+- **GUI**：能量柱 + 模式 / 速度 / 范围 / 权限切换 + 实时吸电供电 + 趋势图
+- **机器贴纸**：`供电` / `吸电` / `过载` / `清除` 四模式；过载模式可绕过常规 API 限制（反射 / NBT 直读写）
+- **自动贴标**：放置机器时自动贴当前模式的标签
+- **可选集成**：Jade、Curios
+
+## 构建
+
+需要 **JDK 17**（Gradle toolchain 会自动获取）。
+
+```bash
+# Windows
+gradlew.bat build
+
+# Linux / macOS
+./gradlew build
 ```
 
-如果没有本机 Gradle，后续建议补 Gradle Wrapper：
+产物：`build/libs/omni-battery-forge-1.20.1-1.0.0.jar`
 
-```bat
-gradle wrapper --gradle-version 8.8
-.\gradlew.bat build
-```
+## 安装
 
-## Notes
+1. 安装 Minecraft 1.20.1 + Forge 47+
+2. 将构建产物（或 [Releases](../../releases) 中的 jar）放入 `.minecraft/mods/`
 
-本模组是 GT15 LightTech Sky 的包专用自创模组，但从现在开始单独维护，方便后续独立修改、打包和发布。
+## 依赖
+
+- **必需**：Forge `[47,)`、Minecraft 1.20.1
+- **可选**：Jade、Curios
+
+## 许可
+
+MIT
