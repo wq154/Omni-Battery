@@ -241,9 +241,8 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     private boolean canUseSticker(StickerSavedData.StickerEntry entry) {
         if (access == BatteryAccess.PUBLIC) return true;
         if (entry == null) return false;
-        // 无归属的老贴纸按主人贴的算
-        UUID who = entry.owner() != null ? entry.owner() : ownerUuid;
-        return canUseUuid(who);
+        // 贴纸必须明确归属（无归属的旧贴纸在私人/队伍模式下不放行）
+        return entry.owner() != null && canUseUuid(entry.owner());
     }
 
     /** 某玩家（UUID）是否可用本电池传电：私人 / 队伍 / 公开。 */
