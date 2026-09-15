@@ -1186,6 +1186,9 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     public BatteryAccess getAccess() { return access; }
     public void setAccess(BatteryAccess a) { this.access = a; setChanged(); }
     public UUID getOwnerUuid() { return ownerUuid; }
+    /** 是否已被认领（有主人）。 */
+    public boolean isClaimed() { return ownerUuid != null; }
+
     public String getOwnerName() { return ownerName == null ? "" : ownerName; }
     public Map<UUID, String> getTrustedPlayers() { return new LinkedHashMap<>(trustedPlayers); }
 

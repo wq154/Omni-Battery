@@ -65,7 +65,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     @Override
     public boolean clickMenuButton(Player player, int button) {
         if (blockEntity == null) return false;
-        blockEntity.ensureOwner(player);
+        // 不能在这里自动认领（否则点一下按钮就能夺走别人的电池）
         if (!blockEntity.canManage(player)) return false;
         switch (button) {
             case 0 -> blockEntity.setMode(blockEntity.getMode().next());

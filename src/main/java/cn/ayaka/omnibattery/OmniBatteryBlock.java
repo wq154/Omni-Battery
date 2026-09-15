@@ -61,9 +61,15 @@ public class OmniBatteryBlock extends BaseEntityBlock {
         if (level.isClientSide) return InteractionResult.SUCCESS;
         BlockEntity be = level.getBlockEntity(pos);
         if (be instanceof OmniBatteryBlockEntity batteryBE && player instanceof ServerPlayer serverPlayer) {
-            if (batteryBE.ensureOwner(player)) {
-                serverPlayer.displayClientMessage(net.minecraft.network.chat.Component.literal(
-                        "你已成为这个电池的主人"), true);
+            // 认领只发生在放置时或"潜行右键"；普通右键不会改变归属
+            if (!batteryBE.isClaimed()) {
+                if (player.isShiftKeyDown() && batteryBE.ensureOwner(player)) {
+                    serverPlayer.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                            "你已成为这个电池的主人"), true);
+                } else {
+                    serverPlayer.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                            "此电池尚未认领：潜行右键可认领为你的"), true);
+                }
             }
             NetworkHooks.openScreen(serverPlayer, batteryBE, buf -> buf.writeBlockPos(pos));
         }
