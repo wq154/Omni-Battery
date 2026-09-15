@@ -478,17 +478,11 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
             }
             if (sticker == StickerMode.OVERLOAD) {
                 int moved = transferReceiveLoop(storage, request);
-                // 过载强灌只在机器"正在运行"（能量在下降）时发生；
-                // 待机机器保持它本来的 NBT，不会被持续喂电，电池也就不会被抽干。
-                if (moved < request && isTargetRunning(be.getBlockPos(), storage)) {
-                    int want = request - moved;
-                    long capacity = storage.getMaxEnergyStored();
-                    if (capacity > 0) {
-                        long stored = storage.getEnergyStored();
-                        if (stored >= capacity) return moved;
-                        want = Math.min(want, BatteryData.clampToForgeInt(capacity - stored));
-                    }
-                    moved += fillEnergyReflective(storage, want);
+                // 机器"愿意接收电"（moved > 0）说明它正在用电 → 反射 / NBT 一路顶满
+                // （单次上限 int 最大值 ≈ 21 亿）；完全拒绝（moved == 0）时绝不硬灌，
+                // 否则会无视机器状态把电池抽干（待机机器最明显）。
+                if (moved > 0 && moved < request) {
+                    moved += fillEnergyReflective(storage, request - moved);
                     if (moved < request) moved += fillEnergyNbt(be, request - moved);
                 }
                 return moved;
