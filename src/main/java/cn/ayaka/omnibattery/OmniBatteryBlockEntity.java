@@ -451,6 +451,21 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         return prev != null && now < prev;
     }
 
+
+    /** 硬灌无效（电被机器丢弃/存不住）的目标；拉黑后不再对它硬灌，避免变成无底洞。 */
+    private final java.util.HashSet<Long> overloadVoidTargets = new java.util.HashSet<>();
+
+    /** 读取机器当前能量：反射优先，其次标准接口；都读不到返回 -1。 */
+    private long probeEnergy(IEnergyStorage storage) {
+        long v = readEnergyReflective(storage);
+        if (v >= 0L) return v;
+        try {
+            return storage.getEnergyStored();
+        } catch (Throwable t) {
+            return -1L;
+        }
+    }
+
     private int tryAbsorbFrom(BlockEntity be, @Nullable Direction dir, int request, StickerMode sticker) {
         LazyOptional<IEnergyStorage> opt = be.getCapability(ForgeCapabilities.ENERGY, dir);
         return opt.map(storage -> {
@@ -478,12 +493,24 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
             }
             if (sticker == StickerMode.OVERLOAD) {
                 int moved = transferReceiveLoop(storage, request);
-                // 机器"愿意接收电"（moved > 0）说明它正在用电 → 反射 / NBT 一路顶满
-                // （单次上限 int 最大值 ≈ 21 亿）；完全拒绝（moved == 0）时绝不硬灌，
-                // 否则会无视机器状态把电池抽干（待机机器最明显）。
-                if (moved > 0 && moved < request) {
-                    moved += fillEnergyReflective(storage, request - moved);
-                    if (moved < request) moved += fillEnergyNbt(be, request - moved);
+                long key = be.getBlockPos().asLong();
+                // 硬灌前记下机器能量，灌完再验：机器能量没涨 = 这些电被丢弃（无底洞）。
+                // 此时把白送出去的电退回电池，并把该目标拉黑，不再对它硬灌。
+                if (moved < request && !overloadVoidTargets.contains(key)) {
+                    long before = probeEnergy(storage);
+                    int extra = fillEnergyReflective(storage, request - moved);
+                    if (extra <= 0) {
+                        extra = fillEnergyNbt(be, request - moved);
+                    }
+                    if (extra > 0) {
+                        long after = probeEnergy(storage);
+                        if (before >= 0L && after >= 0L && after <= before) {
+                            energyStorage.receiveEnergy(extra, false);   // 退回电池
+                            overloadVoidTargets.add(key);                // 拉黑：不再白送
+                        } else {
+                            moved += extra;
+                        }
+                    }
                 }
                 return moved;
             }
