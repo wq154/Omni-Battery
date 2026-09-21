@@ -16,6 +16,8 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     /** 主界面"切换电池"按钮 id。 */
     public static final int SWITCH_BATTERY = 800;
     private static final int TARGET_BASE = 255;
+    /** 电池坐标的数据槽（服务端每 tick 写入；客户端据此查找客户端 BE 的同步列表）。 */
+    private static final int POS_SLOT = TARGET_BASE + TARGET_COUNT * 4 + 8;
     private static final int EMPTY_SLOT = Integer.MIN_VALUE;
 
 
@@ -26,7 +28,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     public OmniBatteryMenu(int id, Inventory inv, OmniBatteryBlockEntity be) {
         super(ModMenuTypes.OMNI_BATTERY.get(), id);
         this.blockEntity = be;
-        this.data = new SimpleContainerData(15 + OmniBatteryBlockEntity.HISTORY_SIZE * 4 + TARGET_COUNT * 4);
+        this.data = new SimpleContainerData(15 + OmniBatteryBlockEntity.HISTORY_SIZE * 4 + TARGET_COUNT * 4 + 11);
         addDataSlots(data);
     }
 
@@ -53,6 +55,11 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             syncLong(11, blockEntity.getSuppliedPerSecond());
             data.set(13, blockEntity.isChargeInventory() ? 1 : 0);
             data.set(14, blockEntity.isChargeCurios() ? 1 : 0);
+            // 电池坐标（供客户端查找客户端 BE 上的同步列表）
+            net.minecraft.core.BlockPos bp = blockEntity.getBlockPos();
+            data.set(POS_SLOT, bp.getX());
+            data.set(POS_SLOT + 1, bp.getY());
+            data.set(POS_SLOT + 2, bp.getZ());
             // 趋势图历史：每点 4 个 int slot（absorb long + supply long）
             for (int i = 0; i < OmniBatteryBlockEntity.HISTORY_SIZE; i++) {
                 syncLong(15 + i * 4, blockEntity.getAbsorbHistory(i));
@@ -182,6 +189,11 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     }
 
     // ---------------- 用电配置页读取 ----------------
+    /** 本界面所属电池的位置（从数据槽读取，客户端也有效）。 */
+    public net.minecraft.core.BlockPos getMenuPos() {
+        return new net.minecraft.core.BlockPos(data.get(POS_SLOT), data.get(POS_SLOT + 1), data.get(POS_SLOT + 2));
+    }
+
     public int getTargetCount() { return TARGET_COUNT; }
 
     public boolean hasTarget(int i) { return data.get(TARGET_BASE + i * 4) != EMPTY_SLOT; }

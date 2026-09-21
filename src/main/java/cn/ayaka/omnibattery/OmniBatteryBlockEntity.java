@@ -115,6 +115,7 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
             be.absorbedThisSecond = 0;
             be.suppliedThisSecond = 0;
             be.secondTick = 0;
+            be.freezeTargetRates();
         }
         if (be.tickCount % SCAN_INTERVAL != 0) return;
         if (be.mode == BatteryMode.OFF) return;
@@ -463,6 +464,86 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         return true;
     }
 
+    // ================== 用电配置界面：数据快照与同步 ==================
+    // 与 1.21.1 同方案：把"全部已打标签机器"写进 BE 的 NBT 同步给客户端，机器数量无上限。
+
+    private final java.util.HashMap<Long, Long> targetAbsorbThisSecond = new java.util.HashMap<>();
+    private final java.util.HashMap<Long, Long> targetSupplyThisSecond = new java.util.HashMap<>();
+    private final java.util.HashMap<Long, Long> targetAbsorbLastSecond = new java.util.HashMap<>();
+    private final java.util.HashMap<Long, Long> targetSupplyLastSecond = new java.util.HashMap<>();
+
+    /** 记录某个目标机器本次传输量（分吸/供两个方向）。 */
+    private void trackTargetMove(BlockPos pos, int moved, boolean absorbing) {
+        if (pos == null || moved <= 0) return;
+        if (absorbing) targetAbsorbThisSecond.merge(pos.asLong(), (long) moved, Long::sum);
+        else targetSupplyThisSecond.merge(pos.asLong(), (long) moved, Long::sum);
+    }
+
+    /** 每秒冻结一次各目标传输量。 */
+    public void freezeTargetRates() {
+        targetAbsorbLastSecond.clear();
+        targetAbsorbLastSecond.putAll(targetAbsorbThisSecond);
+        targetAbsorbThisSecond.clear();
+        targetSupplyLastSecond.clear();
+        targetSupplyLastSecond.putAll(targetSupplyThisSecond);
+        targetSupplyThisSecond.clear();
+    }
+
+    /** 用电配置界面的机器条目（name 为翻译键，客户端按玩家语言翻译）。 */
+    public record TargetInfo(int x, int y, int z, int mode, long absorb, long supply, String name, long cap) {}
+
+    /** 客户端缓存（由 NBT 同步填充）。 */
+    private final java.util.List<TargetInfo> cfgTargets = new java.util.ArrayList<>();
+
+    public java.util.List<TargetInfo> getCfgTargets() { return cfgTargets; }
+
+    /** 本维度所有已打标签的机器，按坐标排序（顺序稳定，界面索引与按钮索引一致）。 */
+    public java.util.List<TargetInfo> snapshotTargets() {
+        java.util.List<TargetInfo> out = new java.util.ArrayList<>();
+        if (!(level instanceof net.minecraft.server.level.ServerLevel sl)) return out;
+        StickerSavedData data = StickerSavedData.get(sl);
+        for (BlockPos pos : data.positions()) {
+            StickerSavedData.StickerEntry e = data.getEntry(pos);
+            if (e == null || e.mode() == null) continue;
+            String nm = "block.minecraft.air";
+            try {
+                net.minecraft.world.level.block.state.BlockState st = sl.getBlockState(pos);
+                if (!st.isAir()) nm = st.getBlock().getDescriptionId();
+            } catch (Throwable ignored) {
+            }
+            long ab = targetAbsorbLastSecond.containsKey(pos.asLong()) ? targetAbsorbLastSecond.get(pos.asLong()) : 0L;
+            long su = targetSupplyLastSecond.containsKey(pos.asLong()) ? targetSupplyLastSecond.get(pos.asLong()) : 0L;
+            out.add(new TargetInfo(pos.getX(), pos.getY(), pos.getZ(), targetModeOrdinal(pos), ab, su, nm,
+                    e.customCap() > 0L ? e.customCap() : 1_000_000L));
+        }
+        out.sort((u, v) -> u.x() != v.x() ? Integer.compare(u.x(), v.x())
+                : (u.y() != v.y() ? Integer.compare(u.y(), v.y()) : Integer.compare(u.z(), v.z())));
+        return out;
+    }
+
+    public void writeCfgTargets(net.minecraft.nbt.CompoundTag tag) {
+        net.minecraft.nbt.ListTag list = new net.minecraft.nbt.ListTag();
+        for (TargetInfo t : snapshotTargets()) {
+            net.minecraft.nbt.CompoundTag e = new net.minecraft.nbt.CompoundTag();
+            e.putInt("x", t.x()); e.putInt("y", t.y()); e.putInt("z", t.z());
+            e.putInt("m", t.mode()); e.putLong("a", t.absorb()); e.putLong("s", t.supply());
+            e.putString("n", t.name()); e.putLong("c", t.cap());
+            list.add(e);
+        }
+        tag.put("CfgTargets", list);
+    }
+
+    public void readCfgTargets(net.minecraft.nbt.CompoundTag tag) {
+        cfgTargets.clear();
+        net.minecraft.nbt.ListTag list = tag.getList("CfgTargets", 10);
+        for (int i = 0; i < list.size(); i++) {
+            net.minecraft.nbt.CompoundTag e = list.getCompound(i);
+            cfgTargets.add(new TargetInfo(e.getInt("x"), e.getInt("y"), e.getInt("z"), e.getInt("m"),
+                    e.getLong("a"), e.getLong("s"), e.getString("n"),
+                    e.contains("c") ? e.getLong("c") : 1_000_000L));
+        }
+    }
+
     public int targetModeOrdinal(BlockPos pos) {
         if (pos == null || !(level instanceof net.minecraft.server.level.ServerLevel sl)) return 0;
         StickerSavedData.StickerEntry e = StickerSavedData.get(sl).getEntry(pos);
@@ -575,6 +656,8 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
             if (isOwnOrOmniBatteryStorage(be, storage)) return 0;
             if (sticker == StickerMode.ABSORB) {
                 return transferExtractOnce(storage, request);
+            // rate tracking for the config page
+            // rate tracking for the config page
             }
             if (sticker == StickerMode.OVERLOAD || sticker == StickerMode.CUSTOM) {
                 if (!canActuallyExtract(storage, request) && readEnergyReflective(storage) <= 0) return 0;
@@ -618,6 +701,8 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
             if (isOwnOrOmniBatteryStorage(be, storage)) return 0;
             if (sticker == StickerMode.SUPPLY) {
                 return transferReceiveOnce(storage, request);
+            // rate tracking for the config page
+            // rate tracking for the config page
             }
             if (sticker == StickerMode.CUSTOM) {
                 // 自定义 = 过载的强力传输，但把"灌入上限"设为玩家设定的数值：
@@ -1242,6 +1327,7 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
 
     @Override
     protected void saveAdditional(CompoundTag tag) {
+        writeCfgTargets(tag);   // 用电配置：全部机器随 BE 同步（无数量上限）
         super.saveAdditional(tag);
         tag.putLong("Energy", energy);
         tag.putInt("Mode", mode.ordinal());
@@ -1262,6 +1348,7 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
+        readCfgTargets(tag);   // 客户端/存档：读回用电配置的机器列表
         energy = Math.max(0L, Math.min(tier.capacity(), tag.getLong("Energy")));
         BatteryMode[] modes = BatteryMode.values();
         int mi = tag.getInt("Mode");
