@@ -12,6 +12,9 @@ import net.minecraft.world.item.ItemStack;
 public class OmniBatteryMenu extends AbstractContainerMenu {
     // ---------------- 用电配置页：目标机器同步 ----------------
     public static final int TARGET_COUNT = 6;
+
+    /** 主界面"切换电池"按钮 id。 */
+    public static final int SWITCH_BATTERY = 800;
     private static final int TARGET_BASE = 255;
     private static final int EMPTY_SLOT = Integer.MIN_VALUE;
 
@@ -105,8 +108,18 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             case 6 -> blockEntity.setChargeInventory(!blockEntity.isChargeInventory());
             case 7 -> blockEntity.setChargeCurios(!blockEntity.isChargeCurios());
             default -> {
-                if (button >= 200 && button < 200 + TARGET_COUNT) {
-                    return cycleTarget(button - 200, player);
+                if (button == SWITCH_BATTERY) {
+                    // 切换电池：切到标签工具绑定的下一块电池并打开它。
+                    // 推迟到下一 tick —— 在菜单回调里直接 openMenu 会破坏容器状态导致服务端崩溃。
+                    if (player instanceof net.minecraft.server.level.ServerPlayer sp2) {
+                        sp2.server.execute(() -> cn.ayaka.omnibattery.network.OpenBoundBatteryPacket
+                                .openFor(sp2, true, -2));
+                    }
+                    return true;
+                }
+                if (button >= 400 && button < 4000) {
+                    // 直接指定模式：option 0 吸电 / 1 供电 / 2 过载 / 3 自定义 / 4 清除
+                    return applyTargetOption((button - 400) / 5, (button - 400) % 5, player);
                 } return false; }
         }
         broadcastChanges();
@@ -184,11 +197,18 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
         return switch (getTargetMode(i)) {
             case 0 -> "吸电";
             case 1 -> "供电";
+            case 3 -> "自定义";
             default -> "过载";
         };
     }
 
     /** 切换第 i 台机器的模式（走服务端按钮）。 */
+    /** 把第 i 台机器设为指定模式（option 0 吸电 / 1 供电 / 2 过载 / 3 自定义 / 4 清除）。 */
+    public boolean applyTargetOption(int index, int option, Player player) {
+        if (blockEntity == null) return false;
+        return blockEntity.applyTargetByIndex(index, option, player);
+    }
+
     public boolean cycleTarget(int i, Player player) {
         if (blockEntity == null || !hasTarget(i)) return false;
         return blockEntity.cycleTargetMode(

@@ -32,8 +32,13 @@ public class OpenBoundBatteryPacket {
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
             ServerPlayer sp = ctx.get().getSender();
-            if (sp == null) return;
+            if (sp != null) openFor(sp, next, index);
+        });
+        ctx.get().setPacketHandled(true);
+    }
 
+    /** 服务端内部/菜单按钮复用：找到身上的贴纸，切换/指定后打开绑定的电池（必须已在服务端线程）。 */
+    public static void openFor(ServerPlayer sp, boolean next, int index) {
             ItemStack sticker = ItemStack.EMPTY;
             for (InteractionHand hand : InteractionHand.values()) {
                 ItemStack st = sp.getItemInHand(hand);
@@ -76,7 +81,5 @@ public class OpenBoundBatteryPacket {
                 return;
             }
             sp.openMenu(be);
-        });
-        ctx.get().setPacketHandled(true);
     }
 }

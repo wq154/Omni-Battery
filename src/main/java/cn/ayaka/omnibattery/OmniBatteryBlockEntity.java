@@ -422,6 +422,47 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     /** 目标机器的模式序号（0 吸电 / 1 供电 / 2 过载），供 GUI 同步。 */
+    /** 按快照索引切换模式（0 吸电 / 1 供电 / 2 过载 / 3 自定义 / 4 清除）。 */
+    public boolean applyTargetByIndex(int index, int option, net.minecraft.world.entity.player.Player player) {
+        if (!canManage(player)) return false;
+        java.util.List<BlockPos> list = stickerTargetsHere(256);
+        if (index < 0 || index >= list.size()) return false;
+        BlockPos pos = list.get(index);
+        StickerMode mode = switch (option) {
+            case 0 -> StickerMode.ABSORB;
+            case 1 -> StickerMode.SUPPLY;
+            case 2 -> StickerMode.OVERLOAD;
+            case 3 -> StickerMode.CUSTOM;
+            default -> null;
+        };
+        return setTargetMode(pos, mode, player);
+    }
+
+    /** 以指定模式设定某台机器（null = 清除标签）。 */
+    public boolean setTargetMode(BlockPos pos, StickerMode mode, net.minecraft.world.entity.player.Player player) {
+        if (pos == null || !canManage(player)) return false;
+        if (!(level instanceof net.minecraft.server.level.ServerLevel sl)) return false;
+        StickerSavedData data = StickerSavedData.get(sl);
+        StickerSavedData.StickerEntry e = data.getEntry(pos);
+        if (e == null) return false;
+        data.setMode(pos, mode, e.owner(), e.ownerName());
+        setChanged();
+        return true;
+    }
+
+    /** 设置某台机器的"自定义"灌入上限。 */
+    public boolean setMachineCap(BlockPos pos, long value, net.minecraft.world.entity.player.Player player) {
+        if (pos == null || !canManage(player)) return false;
+        if (!(level instanceof net.minecraft.server.level.ServerLevel sl)) return false;
+        StickerSavedData data = StickerSavedData.get(sl);
+        StickerSavedData.StickerEntry e = data.getEntry(pos);
+        if (e == null) return false;
+        data.setMode(pos, StickerMode.CUSTOM, e.owner(), e.ownerName(),
+                Math.max(1L, Math.min(Long.MAX_VALUE / 4, value)));
+        setChanged();
+        return true;
+    }
+
     public int targetModeOrdinal(BlockPos pos) {
         if (pos == null || !(level instanceof net.minecraft.server.level.ServerLevel sl)) return 0;
         StickerSavedData.StickerEntry e = StickerSavedData.get(sl).getEntry(pos);
@@ -429,6 +470,7 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         return switch (e.mode()) {
             case ABSORB -> 0;
             case SUPPLY -> 1;
+            case CUSTOM -> 3;
             default -> 2;
         };
     }
