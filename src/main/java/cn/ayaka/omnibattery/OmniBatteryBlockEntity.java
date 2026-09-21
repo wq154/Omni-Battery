@@ -158,7 +158,9 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
                 if (be instanceof OmniBatteryBlockEntity) { stickerData.removeSticker(targetPos); continue; }
                 if (!hasAnyEnergyCapability(be)) { stickerData.removeSticker(targetPos); continue; }
                 // Sticker-only whitelist: absorb only from machines explicitly marked as ABSORB or OVERLOAD.
-                if (sticker != StickerMode.ABSORB && sticker != StickerMode.OVERLOAD) continue;
+                // 吸电方向支持：吸电 / 过载 / 自定义
+                if (sticker != StickerMode.ABSORB && sticker != StickerMode.OVERLOAD
+                        && sticker != StickerMode.CUSTOM) continue;
 
                 if (sticker == StickerMode.ABSORB) {
                     // 无限档突破：对同一目标重复传输，直到预算用尽或对方无能量
@@ -208,7 +210,9 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
                 if (be instanceof OmniBatteryBlockEntity) { stickerData.removeSticker(targetPos); continue; }
                 if (!hasAnyEnergyCapability(be)) { stickerData.removeSticker(targetPos); continue; }
                 // Sticker-only whitelist: supply only to machines explicitly marked as SUPPLY or OVERLOAD.
-                if (sticker != StickerMode.SUPPLY && sticker != StickerMode.OVERLOAD) continue;
+                // 供电方向支持：供电 / 过载 / 自定义
+                if (sticker != StickerMode.SUPPLY && sticker != StickerMode.OVERLOAD
+                        && sticker != StickerMode.CUSTOM) continue;
 
                 if (sticker == StickerMode.SUPPLY) {
                     // 无限档突破：对同一目标重复传输，直到预算用尽或对方已满
@@ -402,6 +406,51 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     }
 
 
+
+    /** 本维度已打标签的机器（供"用电配置"界面枚举）。 */
+    public java.util.List<BlockPos> stickerTargetsHere(int limit) {
+        java.util.List<BlockPos> out = new java.util.ArrayList<>();
+        if (!(level instanceof net.minecraft.server.level.ServerLevel sl)) return out;
+        StickerSavedData data = StickerSavedData.get(sl);
+        for (BlockPos p : data.positions()) {
+            StickerSavedData.StickerEntry e = data.getEntry(p);
+            if (e == null || !e.mode().isActiveTransferMode()) continue;
+            out.add(p);
+            if (out.size() >= limit) break;
+        }
+        return out;
+    }
+
+    /** 目标机器的模式序号（0 吸电 / 1 供电 / 2 过载），供 GUI 同步。 */
+    public int targetModeOrdinal(BlockPos pos) {
+        if (pos == null || !(level instanceof net.minecraft.server.level.ServerLevel sl)) return 0;
+        StickerSavedData.StickerEntry e = StickerSavedData.get(sl).getEntry(pos);
+        if (e == null) return 0;
+        return switch (e.mode()) {
+            case ABSORB -> 0;
+            case SUPPLY -> 1;
+            default -> 2;
+        };
+    }
+
+    /** 循环切换某台被打标签机器的模式：吸电 → 供电 → 过载 → 清除 → 吸电。 */
+    public boolean cycleTargetMode(BlockPos pos, Player player) {
+        if (pos == null || !canManage(player)) return false;
+        if (!(level instanceof net.minecraft.server.level.ServerLevel sl)) return false;
+        StickerSavedData data = StickerSavedData.get(sl);
+        StickerSavedData.StickerEntry e = data.getEntry(pos);
+        if (e == null) return false;
+        StickerMode cur = e.mode();
+        StickerMode next;
+        if (cur == StickerMode.ABSORB) next = StickerMode.SUPPLY;
+        else if (cur == StickerMode.SUPPLY) next = StickerMode.OVERLOAD;
+        else if (cur == StickerMode.OVERLOAD) next = null;      // null = 清除标签
+        else next = StickerMode.ABSORB;
+        data.setMode(pos, next, e.owner(), e.ownerName());
+        setChanged();
+        return true;
+    }
+
     private boolean hasAnyEnergyCapability(BlockEntity be) {
         if (be == null) return false;
         for (Direction dir : capabilitySides()) {
@@ -485,7 +534,7 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
             if (sticker == StickerMode.ABSORB) {
                 return transferExtractOnce(storage, request);
             }
-            if (sticker == StickerMode.OVERLOAD) {
+            if (sticker == StickerMode.OVERLOAD || sticker == StickerMode.CUSTOM) {
                 if (!canActuallyExtract(storage, request) && readEnergyReflective(storage) <= 0) return 0;
                 int moved = transferExtractLoop(storage, request);
                 if (moved < request) moved += drainEnergyReflective(storage, request - moved);
@@ -496,6 +545,31 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
         }).orElse(0);
     }
 
+    // ---- NBT 硬灌/硬抽节流 ----
+    // fillEnergyNbt/drainEnergyNbt 会把机器 BE 整个重新反序列化，代价极高；每 tick 调用会让区块
+    // 反复标脏并冲垮光照引擎（地图全黑 + 刷怪）。限制为每目标每 20 tick 最多一次。
+    private static final int NBT_TOUCH_COOLDOWN = 20;
+    private final java.util.HashMap<Long, Long> nbtTouchTick = new java.util.HashMap<>();
+
+    private boolean mayTouchNbt(net.minecraft.core.BlockPos pos) {
+        if (pos == null || level == null) return false;
+        long now = level.getGameTime();
+        long k = pos.asLong();
+        Long last = nbtTouchTick.get(k);
+        if (last != null && now - last < NBT_TOUCH_COOLDOWN) return false;
+        nbtTouchTick.put(k, now);
+        return true;
+    }
+
+    /** 该目标在贴纸表里登记的"自定义"灌入上限。 */
+    private long customCapFor(BlockEntity be) {
+        if (level instanceof net.minecraft.server.level.ServerLevel sl) {
+            StickerSavedData.StickerEntry e = StickerSavedData.get(sl).getEntry(be.getBlockPos());
+            if (e != null && e.customCap() > 0L) return e.customCap();
+        }
+        return 1_000_000L;
+    }
+
     private int trySupplyTo(BlockEntity be, @Nullable Direction dir, int request, StickerMode sticker) {
         LazyOptional<IEnergyStorage> opt = be.getCapability(ForgeCapabilities.ENERGY, dir);
         return opt.map(storage -> {
@@ -503,30 +577,29 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
             if (sticker == StickerMode.SUPPLY) {
                 return transferReceiveOnce(storage, request);
             }
-            if (sticker == StickerMode.OVERLOAD) {
-                int moved = transferReceiveLoop(storage, request);
-                long key = be.getBlockPos().asLong();
-                // 硬灌前记下机器能量，灌完再验：机器能量没涨 = 这些电被丢弃（无底洞）。
-                // 此时把白送出去的电退回电池，并把该目标拉黑，不再对它硬灌。
-                if (moved < request && !overloadVoidTargets.contains(key)) {
-                    long before = probeEnergy(storage);
-                    int extra = fillEnergyReflective(storage, request - moved);
-                    if (extra <= 0) {
-                        extra = fillEnergyNbt(be, request - moved);
-                    }
-                    if (extra > 0) {
-                        long after = probeEnergy(storage);
-                        // 只有"确认电真的进到机器里"（after 明确大于 before）才算成功；
-                        // 读不到能量或没有增长，一律按"吞电不存"处理（宁可拉黑，也不做无底洞）。
-                        if (!(before >= 0L && after >= 0L && after > before)) {
-                            energyStorage.receiveEnergy(extra, false);   // 退回电池
-                            overloadVoidTargets.add(key);                // 拉黑：不再白送
-                            notifyVoidTarget(level, be.getBlockPos());   // 提示附近玩家改用供电标签
-                        } else {
-                            moved += extra;
-                        }
-                    }
+            if (sticker == StickerMode.CUSTOM) {
+                // 自定义 = 过载的强力传输，但把"灌入上限"设为玩家设定的数值：
+                // 机器电量达到该值就停，所以不会无限吃电。
+                // 绝不修改机器自身状态（不写字段、不碰 NBT）——那会破坏机器或区块光照。
+                long cap = customCapFor(be);
+                long stored = storage.getEnergyStored();
+                if (stored < 0L) stored = 0L;
+                long room = cap - stored;
+                if (room <= 0L) {
+                    // 已达标：退回普通供电，绝不静默（否则玩家会觉得"打上自定义完全没反应"）
+                    return transferReceiveOnce(storage, request);
                 }
+                int budget = (int) Math.min(Math.min((long) request, room), Integer.MAX_VALUE);
+                int moved = transferReceiveLoop(storage, budget);
+                if (moved < budget) moved += fillEnergyReflective(storage, budget - moved);
+                if (moved < budget) moved += fillEnergyNbt(be, budget - moved);
+                return moved;
+            }
+            if (sticker == StickerMode.OVERLOAD) {
+                // 过载 = 强力双向：标准接口之后再用反射 / NBT 灌满（恢复原有行为）
+                int moved = transferReceiveLoop(storage, request);
+                if (moved < request) moved += fillEnergyReflective(storage, request - moved);
+                if (moved < request) moved += fillEnergyNbt(be, request - moved);
                 return moved;
             }
             return 0;
@@ -600,6 +673,8 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     private int drainEnergyNbt(BlockEntity be, int request) {
+        // 节流：NBT 硬灌/硬抽会重载整个 BE，过于频繁会破坏区块光照
+        if (!mayTouchNbt(be.getBlockPos())) return 0;
         if (request <= 0 || be == null || be instanceof OmniBatteryBlockEntity) return 0;
         try {
             CompoundTag tag = be.saveWithFullMetadata();
@@ -625,6 +700,8 @@ public class OmniBatteryBlockEntity extends BlockEntity implements MenuProvider 
     }
 
     private int fillEnergyNbt(BlockEntity be, int request) {
+        // 节流：NBT 硬灌/硬抽会重载整个 BE，过于频繁会破坏区块光照
+        if (!mayTouchNbt(be.getBlockPos())) return 0;
         if (request <= 0 || be == null || be instanceof OmniBatteryBlockEntity) return 0;
         try {
             int extracted = energyStorage.extractEnergy(request, true);

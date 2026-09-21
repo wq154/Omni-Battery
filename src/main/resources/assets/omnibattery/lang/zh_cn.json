@@ -26,5 +26,7 @@
   "screen.omnibattery.title": "万能电池设置",
   "screen.omnibattery.mode": "模式",
   "screen.omnibattery.rate": "速度",
-  "screen.omnibattery.range": "范围"
+  "screen.omnibattery.range": "范围",
+  "key.omnibattery.open_battery": "打开绑定的电池界面（远程）",
+  "key.categories.omnibattery": "万能电池"
 }

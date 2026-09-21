@@ -17,6 +17,7 @@ public class OmniBatteryMod {
     public static final String MOD_ID = "omnibattery";
 
     public OmniBatteryMod() {
+        cn.ayaka.omnibattery.network.OmniBatteryNetwork.register();
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
 
         ModBlocks.register(modBus);

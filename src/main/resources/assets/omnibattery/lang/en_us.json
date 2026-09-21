@@ -26,5 +26,7 @@
   "screen.omnibattery.title": "Omni Battery Settings",
   "screen.omnibattery.mode": "Mode",
   "screen.omnibattery.rate": "Rate",
-  "screen.omnibattery.range": "Range"
+  "screen.omnibattery.range": "Range",
+  "key.omnibattery.open_battery": "Open Bound Battery (remote)",
+  "key.categories.omnibattery": "Omni Battery"
 }

@@ -10,6 +10,12 @@ import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.item.ItemStack;
 
 public class OmniBatteryMenu extends AbstractContainerMenu {
+    // ---------------- 用电配置页：目标机器同步 ----------------
+    public static final int TARGET_COUNT = 6;
+    private static final int TARGET_BASE = 255;
+    private static final int EMPTY_SLOT = Integer.MIN_VALUE;
+
+
     // 0 energy low, 1 energy high, 2 capacity low, 3 capacity high, 4 tier, 5 mode, 6 rate, 7 range, 8 public access
     private final ContainerData data;
     private final OmniBatteryBlockEntity blockEntity;
@@ -17,7 +23,7 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     public OmniBatteryMenu(int id, Inventory inv, OmniBatteryBlockEntity be) {
         super(ModMenuTypes.OMNI_BATTERY.get(), id);
         this.blockEntity = be;
-        this.data = new SimpleContainerData(15 + OmniBatteryBlockEntity.HISTORY_SIZE * 4);
+        this.data = new SimpleContainerData(15 + OmniBatteryBlockEntity.HISTORY_SIZE * 4 + TARGET_COUNT * 4);
         addDataSlots(data);
     }
 
@@ -51,7 +57,25 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             }
         }
         super.broadcastChanges();
-    }
+                // 用电配置页：同步本维度已打标签的机器（坐标 + 模式）
+            java.util.List<net.minecraft.core.BlockPos> cfgTargets =
+                    blockEntity.stickerTargetsHere(TARGET_COUNT);
+            for (int ti = 0; ti < TARGET_COUNT; ti++) {
+                int b = TARGET_BASE + ti * 4;
+                if (ti < cfgTargets.size()) {
+                    net.minecraft.core.BlockPos tp = cfgTargets.get(ti);
+                    data.set(b, tp.getX());
+                    data.set(b + 1, tp.getY());
+                    data.set(b + 2, tp.getZ());
+                    data.set(b + 3, blockEntity.targetModeOrdinal(tp));
+                } else {
+                    data.set(b, EMPTY_SLOT);
+                    data.set(b + 1, EMPTY_SLOT);
+                    data.set(b + 2, EMPTY_SLOT);
+                    data.set(b + 3, EMPTY_SLOT);
+                }
+            }
+}
 
     private void syncLong(int index, long value) {
         data.set(index, (int) (value & 0xFFFFFFFFL));
@@ -80,7 +104,10 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
             }
             case 6 -> blockEntity.setChargeInventory(!blockEntity.isChargeInventory());
             case 7 -> blockEntity.setChargeCurios(!blockEntity.isChargeCurios());
-            default -> { return false; }
+            default -> {
+                if (button >= 200 && button < 200 + TARGET_COUNT) {
+                    return cycleTarget(button - 200, player);
+                } return false; }
         }
         broadcastChanges();
         return true;
@@ -139,5 +166,32 @@ public class OmniBatteryMenu extends AbstractContainerMenu {
     }
     public String getAccessDisplay() {
         return getAccess().display();
+    }
+
+    // ---------------- 用电配置页读取 ----------------
+    public int getTargetCount() { return TARGET_COUNT; }
+
+    public boolean hasTarget(int i) { return data.get(TARGET_BASE + i * 4) != EMPTY_SLOT; }
+
+    public int getTargetX(int i) { return data.get(TARGET_BASE + i * 4); }
+    public int getTargetY(int i) { return data.get(TARGET_BASE + i * 4 + 1); }
+    public int getTargetZ(int i) { return data.get(TARGET_BASE + i * 4 + 2); }
+
+    /** 0 吸电 / 1 供电 / 2 过载 */
+    public int getTargetMode(int i) { return data.get(TARGET_BASE + i * 4 + 3); }
+
+    public String getTargetModeName(int i) {
+        return switch (getTargetMode(i)) {
+            case 0 -> "吸电";
+            case 1 -> "供电";
+            default -> "过载";
+        };
+    }
+
+    /** 切换第 i 台机器的模式（走服务端按钮）。 */
+    public boolean cycleTarget(int i, Player player) {
+        if (blockEntity == null || !hasTarget(i)) return false;
+        return blockEntity.cycleTargetMode(
+                new net.minecraft.core.BlockPos(getTargetX(i), getTargetY(i), getTargetZ(i)), player);
     }
 }
